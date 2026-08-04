@@ -24,3 +24,9 @@ export {
 } from '@youversion/platform-react-hooks';
 
 export { YouVersionProvider } from './components/YouVersionProvider';
+
+/**
+ * @internal Experimental Shadow DOM style-isolation primitive — spike, not a
+ * stable API. See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+ */
+export { ShadowRootHost, useShadowRoot } from './lib/shadow-root-host';

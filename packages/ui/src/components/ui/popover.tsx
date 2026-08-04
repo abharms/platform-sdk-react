@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { Button } from './button';
 import { XIcon } from '../icons/x';
+import { useShadowRoot } from '@/lib/shadow-root-host';
 
 import { cn } from '@/lib/utils';
 
@@ -29,6 +30,7 @@ function PopoverContent({
   showHeader = true,
   sideOffset = 4,
   theme = 'light',
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   showHeader?: boolean;
@@ -38,9 +40,57 @@ function PopoverContent({
   theme?: 'light' | 'dark';
 }): React.ReactNode {
   const { t } = useTranslation(undefined, { i18n });
+  // Ambient, not a prop: when this renders inside a `ShadowRootHost`, redirect
+  // the Portal into that shadow root instead of the default `document.body`
+  // so the popover content is genuinely isolated too, not just the trigger.
+  // `useShadowRoot()` returns `null` outside a `ShadowRootHost`, and Radix's
+  // Portal falls back to `document.body` for a falsy `container` — so this is
+  // a no-op for every existing (non-shadow) usage.
+  const shadowRoot = useShadowRoot();
+
+  // Workaround for a real upstream bug: @radix-ui/react-focus-scope's own
+  // Tab-wraparound logic compares against `document.activeElement` to find
+  // the currently focused element. Inside a shadow root, `document.activeElement`
+  // resolves to the shadow HOST, not the real focused descendant — so its
+  // internal comparison never matches, the wraparound `preventDefault()`
+  // never fires, and Tab past the last focusable element leaks focus out of
+  // the dialog entirely instead of looping back to the first item. Verified
+  // empirically in bible-version-picker.shadow-isolation.stories.tsx before
+  // this fix (see docs/adr/0005-shadow-dom-style-isolation-spike.md).
+  //
+  // This runs before Radix's own broken handler (Radix's `Slot`/`asChild`
+  // composition calls the innermost — i.e. our — prop first), correctly
+  // detects the same edge case using `shadowRoot.activeElement`, and moves
+  // focus itself. It's a no-op outside a shadow root, so non-shadow usage is
+  // unaffected either way.
+  const handleShadowAwareFocusTrap = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    onKeyDown?.(event);
+    if (event.defaultPrevented) return;
+    if (!shadowRoot) return;
+    if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
+
+    const candidates = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (candidates.length === 0) return;
+
+    const first = candidates[0];
+    const last = candidates[candidates.length - 1];
+    const focused = shadowRoot.activeElement;
+
+    if (!event.shiftKey && focused === last) {
+      event.preventDefault();
+      first?.focus();
+    } else if (event.shiftKey && focused === first) {
+      event.preventDefault();
+      last?.focus();
+    }
+  };
 
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={shadowRoot}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         data-yv-sdk
@@ -52,6 +102,7 @@ function PopoverContent({
           'yv:bg-popover yv:text-popover-foreground yv:data-[state=open]:animate-in yv:data-[state=closed]:animate-out yv:data-[state=closed]:fade-out-0 yv:data-[state=open]:fade-in-0 yv:data-[state=closed]:zoom-out-95 yv:data-[state=open]:zoom-in-95 yv:data-[side=bottom]:slide-in-from-top-2 yv:data-[side=left]:slide-in-from-right-2 yv:data-[side=right]:slide-in-from-left-2 yv:data-[side=top]:slide-in-from-bottom-2 yv:z-50 yv:origin-(--radix-popover-content-transform-origin) yv:outline-hidden yv:grid yv:grid-rows-[auto_1fr_auto] yv:p-0 yv:h-full yv:max-h-[66svh] yv:max-sm:max-w-[calc(100vw-2rem)] yv:w-sm yv:sm:max-w-sm yv:overflow-hidden yv:rounded-2xl yv:border-0 yv:shadow-lg',
           className,
         )}
+        onKeyDown={handleShadowAwareFocusTrap}
         {...props}
       >
         {showHeader ? (
