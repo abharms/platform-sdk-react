@@ -53,6 +53,50 @@ layer(yv-sdk-fonts);
    Sans stays Inter, and Source Serif 4 (Google Fonts @import above) stays loaded as the
    serif fallback. */
 
+/*
+ * Shadow DOM inherited-property reset
+ * ===================================
+ * The shadow boundary blocks selector-matched host rules (e.g. a `button {}`
+ * type rule) categorically. But INHERITED properties still cross it: they
+ * inherit onto the shadow host from the outer page, then down into our tree.
+ * So a host `body { letter-spacing: 4px; text-transform: uppercase }` would
+ * still reach SDK components even inside a shadow root — the boundary alone
+ * does NOT make "props are the only way in" true. This closes that gap.
+ *
+ * `:host` matches the shadow host only inside a shadow root, so this whole
+ * block is a no-op in light-DOM (non-shadow) usage and in the document.head
+ * copy of these styles. Inside a ShadowRootHost, `all: initial` breaks
+ * inheritance for every property arriving from the outer page, so descendants
+ * inherit a clean baseline instead of the host's values; the SDK's own
+ * `[data-yv-sdk]` rules and component classes — which live INSIDE the tree and
+ * set what they care about explicitly — then establish the intended look on
+ * top of it. It does not disturb intentional internal inheritance (e.g.
+ * BibleReader's own font/line-height, which its reader root sets explicitly).
+ *
+ * `all` is the bounded, complete reset ADR-0005 promised: it covers every
+ * inherited property that exists (and any added later), so this is not the
+ * ever-growing allowlist the rejected `!important` strategy would have needed.
+ * Verified against MDN, `all` deliberately does NOT reset `direction`/
+ * `unicode-bidi` (so RTL keeps flowing in) or custom properties (so `--yv-*`
+ * tokens still flow — they stay closed to host override by their flat
+ * declaration inside `[data-yv-sdk]`, not by this reset). The two properties
+ * below are inherited locale values `all` would otherwise reset; we re-preserve
+ * them so vertical/RTL scripts still lay out correctly.
+ *
+ * `color-scheme` is deliberately NOT preserved: it resolves to its initial
+ * `normal` under the reset, which is correct here because the SDK drives
+ * light/dark explicitly via `[data-yv-theme]`, not by inheriting the host's
+ * scheme. (It also can't be preserved via `inherit` anyway — the production CSS
+ * minifier rewrites `color-scheme: inherit` to `normal`.)
+ *
+ * See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+ */
+:host {
+  all: initial;
+  writing-mode: inherit;
+  text-orientation: inherit;
+}
+
 /* #region shadcn UI theme */
 @custom-variant dark (&:is([data-yv-sdk][data-yv-theme='dark'] *));
 

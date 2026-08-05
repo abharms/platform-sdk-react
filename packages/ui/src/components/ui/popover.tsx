@@ -79,21 +79,12 @@ function PopoverContent({
   // a no-op for every existing (non-shadow) usage.
   const shadowRoot = useShadowRoot();
 
-  // Workaround for a real upstream bug: @radix-ui/react-focus-scope's own
-  // Tab-wraparound logic compares against `document.activeElement` to find
-  // the currently focused element. Inside a shadow root, `document.activeElement`
-  // resolves to the shadow HOST, not the real focused descendant — so its
-  // internal comparison never matches, the wraparound `preventDefault()`
-  // never fires, and Tab past the last focusable element leaks focus out of
-  // the dialog entirely instead of looping back to the first item. Verified
-  // empirically in bible-version-picker.shadow-isolation.stories.tsx before
-  // this fix (see docs/adr/0005-shadow-dom-style-isolation-spike.md).
-  //
-  // This runs before Radix's own broken handler (Radix's `Slot`/`asChild`
-  // composition calls the innermost — i.e. our — prop first), correctly
-  // detects the same edge case using `shadowRoot.activeElement`, and moves
-  // focus itself. It's a no-op outside a shadow root, so non-shadow usage is
-  // unaffected either way.
+  // Workaround for an upstream @radix-ui/react-focus-scope bug: inside a shadow
+  // root its Tab-wraparound compares against `document.activeElement`, which
+  // resolves to the shadow HOST, so focus leaks out instead of looping. We redo
+  // the edge detection with `shadowRoot.activeElement`. Runs before Radix's own
+  // (still-broken, now-harmless) handler; no-op outside a shadow root.
+  // See docs/adr/0005-shadow-dom-style-isolation-spike.md.
   const handleShadowAwareFocusTrap = (event: React.KeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
     if (event.defaultPrevented) return;

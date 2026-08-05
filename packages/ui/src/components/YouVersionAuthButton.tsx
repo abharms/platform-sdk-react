@@ -10,6 +10,7 @@ import { useYVAuth, useTheme } from '@youversion/platform-react-hooks';
 import { Button } from '../components/ui/button';
 import { YouVersionLogo } from './icons/youversion-logo';
 import { cn } from '../lib/utils';
+import { ShadowRootHost, useShadowRoot } from '../lib/shadow-root-host';
 
 interface SignInAuthProps {
   /**
@@ -109,7 +110,7 @@ export interface YouVersionAuthButtonProps
  * <YouVersionAuthButton scopes={['profile']}/>
  *
  */
-export const YouVersionAuthButton = React.forwardRef<HTMLButtonElement, YouVersionAuthButtonProps>(
+const YouVersionAuthButtonImpl = React.forwardRef<HTMLButtonElement, YouVersionAuthButtonProps>(
   (
     {
       background,
@@ -263,6 +264,32 @@ export const YouVersionAuthButton = React.forwardRef<HTMLButtonElement, YouVersi
         {buttonText}
       </Button>
     );
+  },
+);
+
+YouVersionAuthButtonImpl.displayName = 'YouVersionAuthButtonImpl';
+
+/**
+ * Default-on style isolation: the component wraps itself in a `ShadowRootHost`
+ * so consumers get a fully isolated button with no wrapper of their own —
+ * host-page CSS (selector-matched or inherited) cannot reach it.
+ *
+ * It self-wraps ONLY when not already inside a `ShadowRootHost`
+ * (`useShadowRoot()` is null in light DOM). If an ancestor already established
+ * a shadow boundary, wrapping again would nest a redundant shadow root, so it
+ * renders straight into the existing one instead — keeping the behavior
+ * idempotent and composable.
+ *
+ * NOTE: `attachShadow` runs only in a client effect, so a self-isolated button
+ * renders empty on first paint and pops in — the SSR/first-paint flash tracked
+ * in docs/adr/0005-shadow-dom-style-isolation-spike.md. This prototype makes
+ * that tradeoff visible before deciding to ship default-on broadly.
+ */
+export const YouVersionAuthButton = React.forwardRef<HTMLButtonElement, YouVersionAuthButtonProps>(
+  (props, ref): React.ReactElement => {
+    const alreadyIsolated = useShadowRoot() !== null;
+    const button = <YouVersionAuthButtonImpl {...props} ref={ref} />;
+    return alreadyIsolated ? button : <ShadowRootHost>{button}</ShadowRootHost>;
   },
 );
 

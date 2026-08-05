@@ -28,3 +28,25 @@ button {
   padding: 14px 22px;
 }
 `;
+
+/**
+ * The *other* style-bleed vector, and the one Shadow DOM does NOT block on its
+ * own: INHERITED properties. Unlike `HOSTILE_BUTTON_CSS` (a `button {}` type
+ * selector, which the shadow boundary blocks because selectors can't match
+ * across it), this sets inherited text properties on an ancestor (`body`).
+ * Inherited values propagate parent→child and cross the shadow boundary by
+ * spec, so without the `:host { all: initial }` reset in global.css these
+ * would still reach a shadow-wrapped component.
+ *
+ * Every property here is inherited (verified against MDN). Used by
+ * `YouVersionAuthButton.shadow-isolation.stories.tsx` to prove the reset.
+ * See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+ */
+export const HOSTILE_INHERITED_CSS = `
+body {
+  letter-spacing: 0.35em;
+  word-spacing: 0.5em;
+  text-transform: uppercase;
+  font-style: italic;
+}
+`;

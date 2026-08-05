@@ -658,14 +658,10 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
         side={side}
       >
         {/*
-          Both panels stay mounted so the crossfade can animate, and the
-          inactive one is hidden with opacity/blur/scale rather than being
-          unmounted. `opacity: 0` and `pointer-events: none` do NOT remove
-          anything from sequential focus navigation, though — without `inert`,
-          Tab walks straight into the invisible panel and focus disappears
-          somewhere the user cannot see. `inert` removes the subtree from both
-          the tab order and the accessibility tree without affecting layout,
-          so the animation is unchanged.
+          Both panels stay mounted for the crossfade. opacity/pointer-events
+          don't remove an element from the tab order — only `inert` does, and
+          without touching layout so the animation is unaffected.
+          See docs/adr/0005-shadow-dom-style-isolation-spike.md.
         */}
         <div className="yv:relative yv:min-h-0 yv:overflow-hidden">
           <div
