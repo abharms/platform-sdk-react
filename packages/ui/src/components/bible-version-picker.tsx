@@ -657,8 +657,19 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
         theme={background}
         side={side}
       >
+        {/*
+          Both panels stay mounted so the crossfade can animate, and the
+          inactive one is hidden with opacity/blur/scale rather than being
+          unmounted. `opacity: 0` and `pointer-events: none` do NOT remove
+          anything from sequential focus navigation, though — without `inert`,
+          Tab walks straight into the invisible panel and focus disappears
+          somewhere the user cannot see. `inert` removes the subtree from both
+          the tab order and the accessibility tree without affecting layout,
+          so the animation is unchanged.
+        */}
         <div className="yv:relative yv:min-h-0 yv:overflow-hidden">
           <div
+            inert={isLanguagesOpen}
             className={`yv:h-full yv:min-h-0 yv:overflow-hidden yv:transition-all yv:duration-300 yv:ease-out yv:motion-reduce:transition-none ${
               isLanguagesOpen
                 ? 'yv:opacity-0 yv:pointer-events-none yv:blur-sm yv:scale-95'
@@ -668,6 +679,7 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
             <Content onRequestClose={() => setIsPopoverOpen(false)} />
           </div>
           <div
+            inert={!isLanguagesOpen}
             className={`yv:h-full yv:min-h-0 yv:overflow-hidden yv:absolute yv:inset-0 yv:transition-all yv:duration-300 yv:ease-out yv:motion-reduce:transition-none ${
               isLanguagesOpen
                 ? 'yv:opacity-100 yv:pointer-events-auto yv:blur-none yv:scale-100'
@@ -784,7 +796,6 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
           <InputGroup className="yv:bg-background yv:shadow-none yv:border-border">
             <InputGroupInput
               aria-label={t('versionSearchAriaLabel')}
-              tabIndex={1}
               type="text"
               placeholder={t('searchPlaceholder')}
               value={searchQuery}
@@ -986,7 +997,6 @@ export function BibleLanguagePickerContent({
           <InputGroup className="yv:bg-background yv:shadow-none yv:border-border">
             <InputGroupInput
               aria-label={t('languageSearchAriaLabel')}
-              tabIndex={1}
               type="text"
               placeholder={t('searchPlaceholder')}
               value={languageSearchQuery}

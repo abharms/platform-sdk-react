@@ -4,6 +4,10 @@ Date: 2026-08-04
 
 ## Status
 
+Accepted; amended 2026-08-04 with keyboard/tab-order findings that postdate
+the original spike (see Findings, and Next Steps #1 — which this amendment
+reopens).
+
 Accepted as the chosen style-isolation strategy for
 `@youversion/platform-react-ui`, following team discussion after this spike.
 Shadow DOM is confirmed over the `!important` cascade-layer-reset
@@ -263,11 +267,20 @@ communicated.
   tests) remain green.
 
   **Worth remembering independent of this ADR**: testing real keyboard
-  focus-navigation behavior for anything inside a shadow root, in this test
-  harness, cannot use `userEvent.tab()` or `userEvent.keyboard('{Tab}')` at
+  focus-navigation behavior for anything inside a shadow root cannot use
+  `storybook/test`'s `userEvent.tab()` or `userEvent.keyboard('{Tab}')` at
   face value — both silently defocus everything via the same
   `document.querySelectorAll`-based blind spot, regardless of what's
   actually being tested.
+
+  **Superseded in part — see "Trusted keyboard input is available after all"
+  below.** The synthetic-keydown workaround described above is sound for
+  testing the *edge* case (which is handled in JS, via `preventDefault()` plus
+  a manual `.focus()`), but it is not a general substitute for a keypress: an
+  untrusted `KeyboardEvent` never triggers the browser's native default
+  action, so for any Tab that no JS handler intervenes on, it moves no focus
+  at all and silently asserts nothing. Two real tab-order bugs lived in that
+  gap; see below.
 - **ARIA `aria-controls` resolves correctly** — verified, not just
   theorized. The commonly-cited "ARIA ID-references don't cross shadow
   boundaries" risk doesn't actually apply to this architecture: the
@@ -280,6 +293,95 @@ communicated.
   actual dialog element. This does **not** verify real screen-reader
   behavior (VoiceOver, NVDA, etc.) — only that the structural ARIA
   relationship stays intact; see Next Steps.
+
+- **Trusted keyboard input is available in this harness after all — the
+  earlier "this can't be tested here" conclusion was wrong.** The integration
+  tests already run in Vitest **browser mode with the Playwright provider**
+  (`packages/ui/vitest.config.ts`). `storybook/test` re-exports
+  `@testing-library/user-event`, which simulates Tab in JS and has the
+  shadow-DOM blind spot documented above — but browser mode exposes a
+  *different* `userEvent`, backed by Playwright's CDP-level input:
+
+  ```ts
+  const { userEvent } = await import('vitest/browser');
+  await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+  ```
+
+  These are genuinely trusted events that exercise the browser's own native
+  tab-order computation, which is the only way tab-order behavior can be
+  tested for real. `cdp()` is exported from the same module for raw protocol
+  access. Import it dynamically inside `play` so the story still loads in the
+  Storybook dev UI, which is not browser mode. Every finding below was found
+  with this and could not have been found without it.
+
+- **The reported "Shift+Tab from the search input closes the popover" bug was
+  not a Shadow DOM bug.** The search inputs in `bible-version-picker.tsx` and
+  `bible-chapter-picker.tsx` carried `tabIndex={1}`. A **positive** tabindex
+  places an element at the front of its tab-order scope irrespective of DOM
+  position, so the input was not mid-sequence as it appeared — it was the
+  *first* element, and Shift+Tab from it was a backwards exit off the front
+  edge.
+
+  A light-DOM control (identical trusted Shift+Tab, no `ShadowRootHost`)
+  settled the causation: the broken tab order exists in **both** modes. In
+  light DOM the backwards exit leaves the document for browser chrome,
+  `activeElement` falls back to `body`, no `focusin` fires, and
+  DismissableLayer never notices — a silent focus-loss bug. Inside a shadow
+  tree the positive tabindex is scoped to that tree, so the exit instead lands
+  on the *previous document-order focusable*, which is one of Radix's
+  `useFocusGuards` spans in `document.body` — a real focusable element that
+  fires `focusin`, which DismissableLayer correctly reads as "focus left" and
+  dismisses. **Shadow DOM did not cause the bug; it converted a silent one
+  into a visible one.**
+
+  Note this also means neither Radix's `getTabbableCandidates` nor ours sorts
+  by tabindex — both walk tree order — so any positive tabindex silently
+  invalidates every `first`/`last` edge computation in the focus-trap path.
+  Fixed by removing all three `tabIndex={1}` attributes; a regression test
+  asserts `searchInput.tabIndex === 0` directly, so a reintroduction fails at
+  the cause rather than resurfacing later as a mysterious dismiss.
+
+- **`opacity: 0` does not remove anything from the tab order.**
+  `BibleVersionPicker.Content` keeps its version panel and its language panel
+  both mounted so the crossfade can animate, hiding the inactive one with
+  `opacity-0`/`pointer-events-none`/`blur`/`scale`. None of those affect
+  sequential focus navigation (only `display:none`, `visibility:hidden`, the
+  `hidden` attribute, `inert`, or `tabindex="-1"` do), so Tab out of the
+  search input walked through roughly ten focusable elements of an invisible
+  panel — real focus, no visible focus ring anywhere on screen. Fixed with
+  `inert` on whichever panel is inactive: it removes the subtree from both the
+  tab order and the accessibility tree without touching layout, so the
+  animation is unchanged (`visibility:hidden` would have killed the
+  transition).
+
+- **Tabbable-candidate selection has to mirror Radix's semantics, not just
+  match a selector.** The custom handler's original query
+  (`'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'`)
+  matched roving-tabindex elements — inactive Radix Tabs triggers carry
+  `tabindex="-1"`, and the `:not()` guard only applied to the last selector in
+  the list — plus elements inside hidden or `inert` subtrees. Any of those can
+  make `last` an element the user can never reach, so the *real* last
+  element's Tab goes unhandled, which under Shadow DOM means an unexpected
+  close rather than a mild focus leak. Now filtered through an `isTabbable`
+  predicate checking disabled/hidden/negative-tabindex/`inert`/visibility.
+  `inert` needs an explicit `closest('[inert]')` check: an inert element still
+  reports `tabIndex === 0` and still has layout boxes, so it is invisible to
+  both `tabIndex` and `checkVisibility()`.
+
+- **Decided: keep Radix's focus loop.** Radix hardcodes `loop: true` on its
+  popover FocusScope for all modalities (`trapped` is what varies), so Tab
+  past the last element cycles to the first even for a non-modal popover.
+  That is a divergence from the WAI-ARIA APG, which says a non-modal dialog
+  should let Tab move focus out into the page — but it is not a WCAG 2.1.2
+  keyboard trap, since Escape closes the popover and restores focus to the
+  trigger. Kept as-is: the pickers are bounded selection tasks that take focus
+  on open, cycling matches that, and diverging from Radix's default would make
+  the SDK's popovers behave unlike every other Radix popover for no
+  user-visible gain. The alternative — closing the popover on a genuine edge
+  exit, per APG — remains available but would change behavior for every
+  popover consumer, not just the shadow path. What is *not* acceptable is
+  dropping the custom handler and letting native behavior decide, which yields
+  looping in light DOM and closing in shadow DOM for the same component.
 
 ## Consequences
 
@@ -309,14 +411,30 @@ communicated.
 
 In priority order — this is the actual plan, not an undifferentiated list:
 
-1. ~~Verify focus-trap and ARIA behavior on Popover.~~ **Done.** Focus-trap
-   wraparound was found genuinely broken, fixed, and re-verified (see
-   Findings); `aria-controls` id-referencing was verified structurally
-   intact. **Still open, narrower than originally scoped:** real
-   assistive-technology behavior (VoiceOver/NVDA actually announcing the
-   popover correctly) has not been tested — only the structural ARIA
-   relationship has. Worth a manual pass before calling Popover fully
-   cleared.
+1. **Verify focus-trap and ARIA behavior on Popover.** *Was marked Done; that
+   was premature.* Focus-trap wraparound was found genuinely broken, fixed,
+   and re-verified, and `aria-controls` id-referencing was verified
+   structurally intact — but the verification rested on synthetic keydown
+   events, which cannot move focus at all. Once trusted Playwright input was
+   used (see Findings), **three further keyboard defects surfaced
+   immediately**: positive `tabIndex` on the search inputs, an invisible but
+   fully tabbable language panel, and over-broad tabbable-candidate
+   selection. All three are now fixed and covered by regression tests using
+   trusted input.
+
+   The lesson generalizes past this ADR: **any keyboard-behavior claim in
+   this repo that was verified only with `storybook/test`'s `userEvent` or a
+   dispatched `KeyboardEvent` should be treated as unverified.** Neither
+   moves focus the way a real keypress does.
+
+   **Still open:** real assistive-technology behavior (VoiceOver/NVDA
+   actually announcing the popover correctly) has not been tested — only the
+   structural ARIA relationship has. Worth a manual pass before calling
+   Popover fully cleared. Also unaudited: whether other SDK components hide
+   content with `opacity`/`visibility` in ways that leave it in the tab
+   order — the two occurrences in `bible-version-picker.tsx` are the only
+   `opacity-0` panel-hiding in the component set today, but nothing prevents
+   the pattern from being reintroduced, and it fails silently.
 2. **Bring Radix Dialog to parity with Popover** — same `container`-redirect
    pattern applied to `packages/ui/src/components/ui/dialog.tsx`, tested
    against `sign-in-dialog.tsx` or `highlight-permission-dialog.tsx`.

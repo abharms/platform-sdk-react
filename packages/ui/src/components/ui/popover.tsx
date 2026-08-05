@@ -8,6 +8,37 @@ import { useShadowRoot } from '@/lib/shadow-root-host';
 
 import { cn } from '@/lib/utils';
 
+// Anything that *might* be tabbable; `isTabbable` below does the real filtering.
+const FOCUSABLE_SELECTOR = 'a[href], button, input, select, textarea, [tabindex]';
+
+/**
+ * Mirrors the semantics of `@radix-ui/react-focus-scope`'s own
+ * `getTabbableCandidates`: an element is tabbable only if it is enabled, not
+ * hidden, and has a non-negative tabindex.
+ *
+ * A plain `querySelectorAll('button, input, ...')` is NOT equivalent, and the
+ * difference is load-bearing here — see `handleShadowAwareFocusTrap`. It
+ * matches roving-tabindex elements (Radix Tabs triggers carry
+ * `tabindex="-1"` when inactive) and elements inside collapsed/hidden
+ * subtrees, either of which can make the "last candidate" an element the user
+ * can never actually reach — so the real last element's Tab goes undetected.
+ */
+function isTabbable(element: HTMLElement): boolean {
+  if (element.hasAttribute('disabled') || element.hidden) return false;
+  if (element.tabIndex < 0) return false;
+  // `inert` removes a whole subtree from sequential focus navigation, but is
+  // invisible to both `tabIndex` and `checkVisibility` — an inert element
+  // still reports `tabIndex === 0` and still has layout boxes.
+  if (element.closest('[inert]')) return false;
+  // Catches display:none/visibility:hidden anywhere up the subtree (e.g. an
+  // inactive Radix TabsContent panel, which carries the `hidden` attribute on
+  // the panel itself rather than on its descendants).
+  if (typeof element.checkVisibility === 'function') {
+    return element.checkVisibility({ visibilityProperty: true });
+  }
+  return element.getClientRects().length > 0;
+}
+
 function Popover({
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Root>): React.ReactNode {
@@ -69,11 +100,14 @@ function PopoverContent({
     if (!shadowRoot) return;
     if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
 
+    // DOM order is only the same as tab order when nothing inside carries a
+    // positive tabindex — a positive value moves an element to the front of
+    // its tab-order scope regardless of where it sits in the tree, which would
+    // make `first`/`last` below wrong. The SDK deliberately uses none; see the
+    // note in docs/adr/0005-shadow-dom-style-isolation-spike.md.
     const candidates = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-      ),
-    );
+      event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+    ).filter(isTabbable);
     if (candidates.length === 0) return;
 
     const first = candidates[0];
