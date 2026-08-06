@@ -82,6 +82,19 @@ function getOrCreateSdkStyleSheet(): CSSStyleSheet {
   return sdkStyleSheet;
 }
 
+/**
+ * A host-page stylesheet can select the light-DOM element that owns our shadow
+ * root. Inline author-important declarations outrank host author-important
+ * rules, so establish the host baseline here rather than relying on `:host`.
+ * Custom properties are intentionally handled by the inner reset wrapper.
+ */
+function resetShadowHostStyles(host: HTMLDivElement): void {
+  host.style.setProperty('all', 'initial', 'important');
+  host.style.setProperty('display', 'contents', 'important');
+  host.style.setProperty('writing-mode', 'inherit', 'important');
+  host.style.setProperty('text-orientation', 'inherit', 'important');
+}
+
 export interface ShadowRootHostProps {
   children: ReactNode;
 }
@@ -119,6 +132,7 @@ export function ShadowRootHost({ children }: ShadowRootHostProps): React.ReactNo
     // throw `NotSupportedError`. Checking the live shadow root is StrictMode-safe.
     if (!host || host.shadowRoot) return;
 
+    resetShadowHostStyles(host);
     const root = host.attachShadow({ mode: 'open' });
     if (supportsAdoptedStyleSheets(root)) {
       root.adoptedStyleSheets = [getOrCreateSdkStyleSheet()];
@@ -132,9 +146,7 @@ export function ShadowRootHost({ children }: ShadowRootHostProps): React.ReactNo
   }, [shadowRoot]);
 
   return (
-    // display:contents so this host div doesn't introduce a block-level
-    // wrapper around inline-flex/w-fit SDK components.
-    <div ref={hostRef} data-testid="shadow-root-host" style={{ display: 'contents' }}>
+    <div ref={hostRef} data-testid="shadow-root-host">
       {shadowRoot
         ? createPortal(
             <ShadowRootContext.Provider value={shadowRoot}>

@@ -4,6 +4,7 @@ import {
   HOSTILE_BUTTON_CSS,
   HOSTILE_UNIVERSAL_IMPORTANT_CSS,
   HOSTILE_CUSTOM_PROPS_CSS,
+  HOSTILE_SHADOW_HOST_CSS,
 } from '@/test/hostile-host-styles';
 import { getShadowRoot } from '@/test/shadow-dom-test-utils';
 import {
@@ -188,6 +189,37 @@ export const UniversalImportantIsolation: Story = {
         void expect(p.fontFamily).toContain('Comic Sans');
       },
     }),
+};
+
+/** Proves host-targeting `!important` rules cannot hide or disable the SDK host. */
+export const ShadowHostBoxIsolation: Story = {
+  tags: ['integration'],
+  parameters: divStoryParameters,
+  render: renderControlAndShadowText,
+  play: async ({ canvasElement }) => {
+    const host = await waitFor(() => {
+      const element = canvasElement.querySelector<HTMLElement>('[data-testid="shadow-root-host"]');
+      if (!element) throw new Error('shadow root host not found');
+      return element;
+    });
+    const baseline = getComputedStyle(host);
+    const display = baseline.display;
+    const opacity = baseline.opacity;
+    const pointerEvents = baseline.pointerEvents;
+    const transform = baseline.transform;
+    const hostile = hostStyleController('shadow-host-box-hostile-style', HOSTILE_SHADOW_HOST_CSS);
+
+    try {
+      hostile.inject();
+      const after = getComputedStyle(host);
+      void expect(after.display).toBe(display);
+      void expect(after.opacity).toBe(opacity);
+      void expect(after.pointerEvents).toBe(pointerEvents);
+      void expect(after.transform).toBe(transform);
+    } finally {
+      hostile.remove();
+    }
+  },
 };
 
 /**

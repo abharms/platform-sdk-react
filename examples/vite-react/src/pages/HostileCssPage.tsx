@@ -9,6 +9,9 @@ import {
   BibleTextView,
   ProfileAvatar,
   BibleReader,
+  FootnoteContent,
+  Separator,
+  Textarea,
 } from '@youversion/platform-react-ui';
 
 /**
@@ -242,6 +245,21 @@ export function HostileCssPage() {
               <BibleReader.Toolbar />
             </BibleReader.Root>
           </div>
+
+          {/* The remaining public exports — smaller standalone pieces, also
+              isolated. FootnoteContent is pure/presentational; Separator and
+              Textarea are primitives that now self-isolate too. */}
+          <FootnoteContent
+            verseNum="16"
+            notes={['A representative footnote body.']}
+            verseHtml="For God so loved the world"
+            reference="JHN.3"
+            theme={sdkTheme}
+          />
+
+          <Separator />
+
+          <Textarea defaultValue="Editable SDK textarea." />
         </section>
       </div>
     </div>

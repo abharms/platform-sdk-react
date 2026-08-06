@@ -73,6 +73,16 @@ export const HOSTILE_UNIVERSAL_IMPORTANT_CSS = `
 }
 `;
 
+/** Host-targeting properties compose around the entire shadow tree. */
+export const HOSTILE_SHADOW_HOST_CSS = `
+[data-testid='shadow-root-host'] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(0.5) !important;
+}
+`;
+
 /**
  * CSS custom-property vector. `all: initial` deliberately does NOT reset custom
  * properties, and they inherit across the shadow boundary, so a host that
@@ -93,6 +103,25 @@ export const HOSTILE_CUSTOM_PROPS_CSS = `
 `;
 
 /**
+ * Prefixed SDK design tokens (`--yv-*`). Tailwind v4 emits its theme on
+ * `:root, :host`, so these land on the light-DOM shadow HOST and are reachable by
+ * `* { --yv-x !important }` — which then inherits into the shadow content, since
+ * `all: initial` can't reset custom properties. They feed nearly every generated
+ * utility (`--yv-spacing` alone is used 100+ times for padding/gap/size), so this
+ * distorts spacing, radius, width, and type. Neutralized by re-declaring
+ * Tailwind's theme block on the unreachable `[data-yv-shadow-content]` wrapper at
+ * build time. See docs/adr/0005-shadow-dom-style-isolation.md.
+ */
+export const HOSTILE_YV_TOKENS_CSS = `
+* {
+  --yv-spacing: 48px !important;
+  --yv-radius-2xl: 0px !important;
+  --yv-container-sm: 100rem !important;
+  --yv-text-base: 40px !important;
+}
+`;
+
+/**
  * Every non-`@font-face` vector at once — the full barrage the all-exports
  * regression harness fires at each component (see
  * `all-exports.shadow-isolation.stories.tsx`). Deliberately excludes the
@@ -107,4 +136,5 @@ export const HOSTILE_ALL_VECTORS_CSS = [
   HOSTILE_INHERITED_CSS,
   HOSTILE_UNIVERSAL_IMPORTANT_CSS,
   HOSTILE_CUSTOM_PROPS_CSS,
+  HOSTILE_YV_TOKENS_CSS,
 ].join('\n');

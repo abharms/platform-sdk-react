@@ -2,14 +2,22 @@ import type { StorybookConfig } from '@storybook/react-vite';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, existsSync } from 'fs';
+import { scopeThemeToShadowWrapper } from '../scripts/scope-theme-to-shadow-wrapper.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Embed real CSS into __YV_STYLES__ — same pattern as tsup.config.ts.
 // This ensures Storybook tests the actual <YvStyles /> code path with
 // real CSS content, not a workaround import.
+//
+// Apply the shadow-wrapper theme scoping here too (idempotent): the `storybook`
+// script's `tailwindcss --watch` regenerates dist/tailwind.css WITHOUT the
+// build:css post-step, so without this Storybook would test un-scoped CSS and the
+// --yv-* token leak would reappear. See scripts/scope-theme-to-shadow-wrapper.mjs.
 const cssPath = resolve(__dirname, '../dist/tailwind.css');
-const yvStyles = existsSync(cssPath) ? JSON.stringify(readFileSync(cssPath, 'utf-8')) : '""';
+const yvStyles = existsSync(cssPath)
+  ? JSON.stringify(scopeThemeToShadowWrapper(readFileSync(cssPath, 'utf-8')))
+  : '""';
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.mdx', '../src/**/*.stories.@(js|jsx|mjs|ts|tsx)'],
