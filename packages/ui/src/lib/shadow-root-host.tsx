@@ -14,6 +14,13 @@ declare const __YV_STYLES__: string;
 
 const ShadowRootContext = createContext<ShadowRoot | null>(null);
 
+// The reset wrapper element (see ShadowRootHost) — the portal container that
+// puts portaled Radix content INSIDE the isolation reset, not as a bare child of
+// the ShadowRoot (which sits outside the reset and would bleed). Separate from
+// ShadowRootContext because the focus trap still needs the real ShadowRoot for
+// `shadowRoot.activeElement`, which a wrapper element does not expose.
+const ShadowPortalContainerContext = createContext<HTMLElement | null>(null);
+
 /**
  * @internal Experimental Shadow DOM style-isolation primitive — spike, not a
  * stable API. See docs/adr/0005-shadow-dom-style-isolation.md.
@@ -36,12 +43,19 @@ export function useShadowRoot(): ShadowRoot | null {
 export function useShadowPortal<T extends HTMLElement = HTMLElement>(
   contentOnKeyDown?: KeyboardEventHandler<T>,
 ): {
-  portalProps: { container: ShadowRoot | null };
+  portalProps: { container: HTMLElement | ShadowRoot | null };
   contentProps: { onKeyDown: KeyboardEventHandler<T> };
 } {
   const shadowRoot = useShadowRoot();
+  const portalContainer = useContext(ShadowPortalContainerContext);
+  // Portal into the reset wrapper (inside the isolation reset). Fall back to the
+  // ShadowRoot itself for the one render before the wrapper's ref callback fires
+  // (only reachable by an initially-open overlay) — still inside the shadow tree
+  // and styled, NEVER document.body; Radix re-parents into the wrapper once it's
+  // set. Outside a ShadowRootHost both are null, so Radix uses document.body as
+  // before. The focus trap keeps the ShadowRoot (needs `.activeElement`).
   return {
-    portalProps: { container: shadowRoot },
+    portalProps: { container: portalContainer ?? shadowRoot },
     contentProps: { onKeyDown: createShadowAwareFocusTrap<T>(shadowRoot, contentOnKeyDown) },
   };
 }
@@ -91,6 +105,9 @@ export interface ShadowRootHostProps {
 export function ShadowRootHost({ children }: ShadowRootHostProps): React.ReactNode {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [shadowRoot, setShadowRoot] = useState<ShadowRoot | null>(null);
+  // The reset wrapper element, tracked as state (not a plain ref) so consumers
+  // reading it via ShadowPortalContainerContext re-render once it's attached.
+  const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
   const [needsStyleTagFallback, setNeedsStyleTagFallback] = useState(false);
 
   useEffect(() => {
@@ -121,8 +138,22 @@ export function ShadowRootHost({ children }: ShadowRootHostProps): React.ReactNo
       {shadowRoot
         ? createPortal(
             <ShadowRootContext.Provider value={shadowRoot}>
-              {needsStyleTagFallback ? <style>{__YV_STYLES__}</style> : null}
-              {children}
+              <ShadowPortalContainerContext.Provider value={contentEl}>
+                {needsStyleTagFallback ? <style>{__YV_STYLES__}</style> : null}
+                {/*
+                  The reset wrapper — the AUTHORITATIVE isolation boundary. Host
+                  CSS cannot select an element inside a shadow tree (not even
+                  `* { …!important }`), so the reset keyed on [data-yv-shadow-content]
+                  in global.css is unbeatable here, where `:host` is not (an outer
+                  !important rule matches and outranks `:host`). Both inline children
+                  AND portaled Radix content (via ShadowPortalContainerContext →
+                  useShadowPortal) live inside it, so everything inherits the clean
+                  reset baseline. See docs/adr/0005-shadow-dom-style-isolation.md.
+                */}
+                <div ref={setContentEl} data-yv-shadow-content>
+                  {children}
+                </div>
+              </ShadowPortalContainerContext.Provider>
             </ShadowRootContext.Provider>,
             shadowRoot,
           )

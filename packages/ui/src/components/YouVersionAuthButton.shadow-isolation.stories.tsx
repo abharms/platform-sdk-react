@@ -1,10 +1,18 @@
 import { ShadowRootHost } from '@/lib/shadow-root-host';
 import { ShadowIsolationOverrideProvider } from '@/lib/shadow-isolation';
-import { HOSTILE_BUTTON_CSS, HOSTILE_INHERITED_CSS } from '@/test/hostile-host-styles';
+import {
+  HOSTILE_BUTTON_CSS,
+  HOSTILE_UNIVERSAL_IMPORTANT_CSS,
+  HOSTILE_CUSTOM_PROPS_CSS,
+} from '@/test/hostile-host-styles';
 import { getShadowRoot } from '@/test/shadow-dom-test-utils';
-import { hostStyleController } from '@/test/shadow-isolation-story-utils';
+import {
+  hostStyleController,
+  assertStyleIsolation,
+  assertInheritedStyleIsolation,
+} from '@/test/shadow-isolation-story-utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { createRef } from 'react';
+import { createRef, type ReactElement } from 'react';
 import { expect, fn, spyOn, userEvent, waitFor } from 'storybook/test';
 import { YouVersionAuthButton } from './YouVersionAuthButton';
 
@@ -25,7 +33,10 @@ let signInMock: ReturnType<typeof fn>;
 const meta = {
   title: 'Spikes/YouVersionAuthButton (Shadow DOM)',
   component: YouVersionAuthButton,
-  tags: ['autodocs'],
+  // No 'autodocs': internal isolation proof/regression story, not consumer API
+  // docs. Kept consistent with the other *.shadow-isolation stories, none of
+  // which publish a Docs page. The `integration`-tagged stories still run as
+  // interaction tests.
   async beforeEach() {
     const { YouVersionAPIUsers } = await import('@youversion/platform-core');
     signInMock = fn().mockImplementation(() =>
@@ -108,88 +119,98 @@ export const StyleIsolation: Story = {
 };
 
 /**
- * The complement to `StyleIsolation`. That story proves the shadow boundary
- * blocks a `button {}` *selector*. This one proves the separate, harder vector:
- * INHERITED properties (`body { text-transform; letter-spacing; ... }`) cross
- * the boundary by spec, and are stopped only by the `:host { all: initial }`
- * reset in global.css.
- *
- * The subjects here are plain <div>s, NOT YouVersionAuthButton, on purpose: a
- * <button> is a form control whose UA stylesheet already resets inherited text
- * properties (text-transform/letter-spacing/font-*) on the control, insulating
- * its whole subtree — so it cannot demonstrate the inheritance bleed. Most SDK
- * text (BibleReader, cards, popovers) is NOT inside a form control and does
- * inherit, so a plain element is the faithful probe for that vector.
+ * The three div-based isolation proofs below share one fixture: a light-DOM
+ * `control-text` beside a shadow-isolated `shadow-text`, both plain <div>s. Plain
+ * <div>s, NOT YouVersionAuthButton, on purpose: a <button> is a form control
+ * whose UA stylesheet already resets inherited text properties on the control,
+ * insulating its subtree — so it can't demonstrate inherited/host bleed. Most SDK
+ * text (BibleReader, cards, popovers) is not inside a form control and does
+ * inherit, so a plain element is the faithful probe.
  *
  * NOTE: `__YV_STYLES__` is injected from the pre-built dist/tailwind.css (see
- * .storybook/main.ts), so this fails until `pnpm build:css` has run with the
- * reset present.
+ * .storybook/main.ts), so these fail until `pnpm build:css` has run.
+ */
+const renderControlAndShadowText = (): ReactElement => (
+  <div style={{ display: 'flex', gap: 24 }}>
+    <div data-testid="control-text">YouVersion</div>
+    <ShadowRootHost>
+      <div data-testid="shadow-text">YouVersion</div>
+    </ShadowRootHost>
+  </div>
+);
+
+const isolationSubjects = {
+  control: '[data-testid="control-text"]',
+  subject: '[data-testid="shadow-text"]',
+} as const;
+
+// Plain <div>s, not the auth button, so opt out of the auth provider (which would
+// also need the auth-redirect env var).
+const divStoryParameters = { includeAuth: false } as const;
+
+/**
+ * The complement to `StyleIsolation` (which proves the boundary blocks a
+ * `button {}` *selector*). This proves the harder vector: INHERITED properties
+ * cross the boundary and are stopped only by the wrapper reset.
  */
 export const InheritedStyleIsolation: Story = {
   tags: ['integration'],
-  // This story renders plain <div>s, not the auth button — it has no reason to
-  // spin up the auth provider (which would also require the auth-redirect env
-  // var). Opt out so it doesn't pull in auth it doesn't use.
-  parameters: { includeAuth: false },
-  render: () => (
-    <div style={{ display: 'flex', gap: 24 }}>
-      <div data-testid="control-text">YouVersion</div>
-      <ShadowRootHost>
-        <div data-testid="shadow-text">YouVersion</div>
-      </ShadowRootHost>
-    </div>
-  ),
-  play: async ({ canvasElement }) => {
-    const hostStyle = hostStyleController(
-      'shadow-inherited-isolation-hostile-style',
-      HOSTILE_INHERITED_CSS,
-    );
+  parameters: divStoryParameters,
+  render: renderControlAndShadowText,
+  play: ({ canvasElement }) => assertInheritedStyleIsolation(canvasElement, isolationSubjects),
+};
 
-    let controlTextMaybe: HTMLDivElement | null = null;
-    await waitFor(() => {
-      controlTextMaybe = canvasElement.querySelector<HTMLDivElement>(
-        '[data-testid="control-text"]',
-      );
-      if (!controlTextMaybe) throw new Error('control text not found');
-    });
-    if (!controlTextMaybe) throw new Error('control text not found');
-    const controlText: HTMLDivElement = controlTextMaybe;
+/**
+ * The sharpest inherited-property vector: a universal `!important` rule. `*`
+ * matches the shadow HOST element, where an outer author-important declaration
+ * outranks the SDK's `:host` reset — so the reset had to move onto an inner
+ * `[data-yv-shadow-content]` wrapper, which no outer selector can match. Plain
+ * <div>s (not the auth button) for the same reason as `InheritedStyleIsolation`:
+ * a <button>'s UA styles mask inherited text properties.
+ */
+export const UniversalImportantIsolation: Story = {
+  tags: ['integration'],
+  parameters: divStoryParameters,
+  render: renderControlAndShadowText,
+  play: ({ canvasElement }) =>
+    assertStyleIsolation(canvasElement, {
+      ...isolationSubjects,
+      css: HOSTILE_UNIVERSAL_IMPORTANT_CSS,
+      styleId: 'universal-important-hostile-style',
+      probe: (s) => ({
+        textTransform: s.textTransform,
+        letterSpacing: s.letterSpacing,
+        fontFamily: s.fontFamily,
+        color: s.color,
+      }),
+      assertControlClobbered: (p) => {
+        void expect(p.textTransform).toBe('uppercase');
+        void expect(p.fontFamily).toContain('Comic Sans');
+      },
+    }),
+};
 
-    const shadowRoot = await getShadowRoot(canvasElement);
-    let shadowTextMaybe: HTMLDivElement | null = null;
-    await waitFor(() => {
-      shadowTextMaybe = shadowRoot.querySelector<HTMLDivElement>('[data-testid="shadow-text"]');
-      if (!shadowTextMaybe) throw new Error('shadow text not found');
-    });
-    if (!shadowTextMaybe) throw new Error('shadow text not found');
-    const shadowText: HTMLDivElement = shadowTextMaybe;
-
-    // Baseline, before the hostile host stylesheet exists.
-    const shadowBaselineTextTransform = getComputedStyle(shadowText).textTransform;
-    const shadowBaselineLetterSpacing = getComputedStyle(shadowText).letterSpacing;
-
-    try {
-      hostStyle.inject();
-
-      await waitFor(() => {
-        // Self-check: the light-DOM control MUST inherit the hostile styles, or
-        // the fixture isn't reproducing the inherited-property bleed and this
-        // test proves nothing.
-        const controlAfter = getComputedStyle(controlText);
-        void expect(controlAfter.textTransform).toBe('uppercase');
-        void expect(controlAfter.letterSpacing).not.toBe('normal');
-      });
-
-      // The shadow-DOM element must be completely unaffected: `:host { all:
-      // initial }` breaks the inheritance chain at the boundary.
-      const shadowAfter = getComputedStyle(shadowText);
-      void expect(shadowAfter.textTransform).toBe(shadowBaselineTextTransform);
-      void expect(shadowAfter.textTransform).not.toBe('uppercase');
-      void expect(shadowAfter.letterSpacing).toBe(shadowBaselineLetterSpacing);
-    } finally {
-      hostStyle.remove();
-    }
-  },
+/**
+ * Custom-property vector. `all: initial` cannot reset custom properties, and they
+ * inherit across the shadow boundary, so the one bare var the SDK resolves at
+ * runtime (`--spacing`, from the unprefixed tw-animate-css import) is re-declared
+ * on the wrapper. Asserts the shadow subject resolves the SDK's value, not the
+ * host's override.
+ */
+export const CustomPropsIsolation: Story = {
+  tags: ['integration'],
+  parameters: divStoryParameters,
+  render: renderControlAndShadowText,
+  play: ({ canvasElement }) =>
+    assertStyleIsolation(canvasElement, {
+      ...isolationSubjects,
+      css: HOSTILE_CUSTOM_PROPS_CSS,
+      styleId: 'custom-props-hostile-style',
+      probe: (s) => ({ spacing: s.getPropertyValue('--spacing').trim() }),
+      assertControlClobbered: (p) => {
+        void expect(p.spacing).toBe('48px');
+      },
+    }),
 };
 
 /**

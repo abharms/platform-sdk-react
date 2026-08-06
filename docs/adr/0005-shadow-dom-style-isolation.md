@@ -206,13 +206,52 @@ portal lands inside the shadow root, not `document.body`.
 Done: the original #1 (inherited-property reset), #3 (Dialog parity), and #6
 (full default-on rollout).
 
+**Update (2026-08) — hostile-CSS hardening.** Production testing (a real consumer
+app, `examples/vite-react`, injecting aggressive `!important` global CSS) found
+two channels the original `:host { all: initial }` reset did NOT close. This
+supersedes the earlier claim (above) that `all: initial` on `:host` was the
+"bounded, complete reset."
+
+- **Host-targeting `!important`.** A host `* { … !important }` matches the shadow
+  HOST element itself; an outer important declaration outranks a `:host` reset
+  (and cross-shadow scoping defeats even `:host { all: initial !important }`), so
+  the host's inherited props flowed into the shadow content — the host element can
+  never be won. **Fixed** by moving the authoritative reset onto an inner
+  `[data-yv-shadow-content]` wrapper ShadowRootHost renders inside the shadow root:
+  no outer selector can match an element inside a shadow tree, so nothing competes
+  with the reset. Portaled Radix content now targets this wrapper too
+  (`useShadowPortal` → `ShadowPortalContainerContext`), so it inherits the same
+  clean baseline instead of sitting as a bare shadow-root child outside the reset.
+- **Custom-property leak.** `all: initial` does not reset custom properties, and
+  they inherit across the boundary. `input-group.tsx`'s bare `var(--radius)` was
+  namespaced to `--yv-radius` at source; the remaining bare `var(--spacing)` (from
+  the unprefixed `tw-animate-css` import — third-party CSS we don't control) is
+  **fixed** by declaring `--spacing` on the wrapper. Every other var was already
+  safe (`--yv-*` shadow-local, `--tw-*` registered `@property { inherits: false }`).
+
+Regression proofs: `UniversalImportantIsolation` and `CustomPropsIsolation` in
+`YouVersionAuthButton.shadow-isolation.stories.tsx`.
+
 Still open, in priority order:
 
 1. **Portal-clipping vs. body-escape.** Redirecting portals into a locally-
    nested shadow root reintroduces the ancestor `overflow`/clipping risk that
    Radix's `document.body` portal avoided. An architectural decision (where
    shadow roots attach), untested at real consumer densities.
-2. **SSR/first-paint flash — now global.** Every isolated component paints empty
+2. **`@font-face` hijack — known limitation, not fixed.** Font faces are
+   *document-scoped*: a shadow root resolves font-family names against the
+   document's font set, so a host `@font-face { font-family: 'Inter'; … }` reaches
+   inside the shadow and the SDK's `font-family: 'Inter'` renders with the hijacked
+   font. Neither the shadow boundary nor `all: initial` can block this — the SDK is
+   asking for a name the host has redefined. Realistic by accident (many sites
+   self-host Inter). The only fix is **namespacing the SDK's font-family names**
+   (e.g. `'YouVersion Inter'`) with SDK-declared `@font-face` — which requires
+   self-hosting Inter/Source Serif 4 (their real byte URLs live inside Google's
+   dynamic CSS), CSP changes, and either a Fonts-API family rename or wiring the
+   currently-unused `GET /v1/fonts/1` JSON endpoint for Untitled Serif. A separate,
+   cross-cutting effort; tracked as a follow-up. Reproducible via the `@font-face
+   hijack` toggle on the `examples/vite-react` hostile-CSS page.
+3. **SSR/first-paint flash — now global.** Every isolated component paints empty
    on first client mount. The mitigation is declarative Shadow DOM (DSD).
    `react-shadow` (v20.6.0 — verified from its published source) already
    implements this: with its `ssr` prop it emits `<template shadowrootmode>`
@@ -225,16 +264,16 @@ Still open, in priority order:
    the shadow attaches in an effect, a **forwarded ref resolves `null` on the
    consumer's first mount effect** (it becomes available one commit later). A
    synchronous-attach / DSD path addresses both the flash and the ref timing.
-3. **Remaining isolation stories** (the other 7 components) — mechanical
+4. **Remaining isolation stories** (the other 7 components) — mechanical
    re-proofs of the same mechanism; a safety-net follow-up, not a gap in the
    implementation.
-4. **Assistive-tech + a11y** — real VoiceOver/NVDA passes; the pre-existing
+5. **Assistive-tech + a11y** — real VoiceOver/NVDA passes; the pre-existing
    tab-ORDER bugs (positive `tabIndex`, `opacity`-hidden panels in the tab
    order) remain deferred, and are distinct from the shadow focus-trap (done).
-5. **Expand props as gaps surface** — tokens stay flat/internal (props-only);
+6. **Expand props as gaps surface** — tokens stay flat/internal (props-only);
    promoting a token to a public host-overridable variable is a deliberate
    exception, not the default path.
-6. **Longer-horizon:** external code review; cross-browser verification
+7. **Longer-horizon:** external code review; cross-browser verification
    (Chromium-only so far); Untitled Serif `@font-face`-crossing verification;
    productionizing `ShadowRootHost`/`useShadowRoot` — kept `@internal` for now,
    since consumers no longer need them (components self-isolate).

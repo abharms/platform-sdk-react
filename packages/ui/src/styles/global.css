@@ -54,40 +54,61 @@ layer(yv-sdk-fonts);
    serif fallback. */
 
 /*
- * Shadow DOM inherited-property reset
- * ===================================
+ * Shadow DOM isolation reset
+ * ==========================
  * The shadow boundary blocks selector-matched host rules (e.g. a `button {}`
- * type rule) categorically. But INHERITED properties still cross it: they
- * inherit onto the shadow host from the outer page, then down into our tree.
- * So a host `body { letter-spacing: 4px; text-transform: uppercase }` would
- * still reach SDK components even inside a shadow root — the boundary alone
- * does NOT make "props are the only way in" true. This closes that gap.
+ * type rule) categorically. But two things still cross it: INHERITED properties
+ * (they inherit onto the shadow host from the outer page, then down into our
+ * tree) and CUSTOM PROPERTIES (same, and `all` deliberately does NOT reset them).
+ * So a host `body { letter-spacing: 4px }` — or `:root { --spacing: 40px }` —
+ * would otherwise still reach SDK components inside a shadow root. This closes
+ * that gap.
  *
- * `:host` matches the shadow host only inside a shadow root, so this whole
- * block is a no-op in light-DOM (non-shadow) usage and in the document.head
- * copy of these styles. Inside a ShadowRootHost, `all: initial` breaks
- * inheritance for every property arriving from the outer page, so descendants
- * inherit a clean baseline instead of the host's values; the SDK's own
- * `[data-yv-sdk]` rules and component classes — which live INSIDE the tree and
- * set what they care about explicitly — then establish the intended look on
- * top of it. It does not disturb intentional internal inheritance (e.g.
- * BibleReader's own font/line-height, which its reader root sets explicitly).
+ * WHY THE RESET LIVES ON AN INNER WRAPPER, NOT `:host`.
+ * `:host` matches the shadow HOST element, which is in the LIGHT DOM — a host
+ * rule can select it. Against a hostile `* { … !important }`, an outer important
+ * declaration outranks our normal `:host` rule (the entire important-author
+ * cascade band outranks the entire normal-author band), and even
+ * `:host { all: initial !important }` loses, because cross-shadow scoping hands
+ * the host element to the outer rule. The host element simply cannot be won.
+ *   So the authoritative reset lives on `[data-yv-shadow-content]` — the wrapper
+ * ShadowRootHost renders INSIDE the shadow root (see shadow-root-host.tsx). No
+ * outer selector can match an element inside a shadow tree, so nothing competes
+ * for this element's properties and the reset always wins. All inline AND
+ * portaled content lives inside the wrapper, so everything inherits its clean
+ * baseline; a specified value on the wrapper beats an inherited value regardless
+ * of the inherited source's importance.
  *
- * `all` is the bounded, complete reset ADR-0005 promised: it covers every
- * inherited property that exists (and any added later), so this is not the
- * ever-growing allowlist the rejected `!important` strategy would have needed.
- * Verified against MDN, `all` deliberately does NOT reset `direction`/
- * `unicode-bidi` (so RTL keeps flowing in) or custom properties (so `--yv-*`
- * tokens still flow — they stay closed to host override by their flat
- * declaration inside `[data-yv-sdk]`, not by this reset). The two properties
- * below are inherited locale values `all` would otherwise reset; we re-preserve
- * them so vertical/RTL scripts still lay out correctly.
+ * `all: initial` breaks inheritance for every standard inherited property; the
+ * SDK's own `[data-yv-sdk]` rules then set what they care about explicitly on
+ * top. `display: contents` keeps the wrapper layout-transparent (`all: initial`
+ * would otherwise make it `inline`). `writing-mode`/`text-orientation` are
+ * re-inherited so vertical/RTL scripts still lay out; `all` already leaves
+ * `direction`/`unicode-bidi` alone so RTL keeps flowing.
  *
- * `color-scheme` is deliberately NOT preserved: it resolves to its initial
- * `normal` under the reset, which is correct here because the SDK drives
- * light/dark explicitly via `[data-yv-theme]`, not by inheriting the host's
- * scheme. (It also can't be preserved via `inherit` anyway — the production CSS
- * minifier rewrites `color-scheme: inherit` to `normal`.)
+ * Custom properties: `all` can't reset them, so bare `var(--spacing)` — which is
+ * resolved at runtime without a shadow-local definition from BOTH the unprefixed
+ * tw-animate-css import AND an SDK arbitrary value (bible-version-picker.tsx's
+ * `w-[calc(100%-4*var(--spacing)*2)]`) — is neutralized by declaring `--spacing`
+ * here. Declaring it at this boundary is what makes it a single-point fix for
+ * every bare-`--spacing` consumer; prefixing tw-animate-css would miss the
+ * arbitrary value (Tailwind doesn't rewrite var names inside `[...]`) and break
+ * it. The value is hardcoded, not `var(--yv-spacing)`, on purpose: a literal
+ * can't be re-hijacked by a `--yv-spacing` override. (`input-group`'s bare
+ * `--radius` was namespaced to `--yv-radius` at source, so no bare `--radius`
+ * remains to guard.) Every other var is already safe: `--yv-*` are shadow-local
+ * (on `[data-yv-sdk]` / `:root,:host`) and `--tw-*` are registered
+ * `@property { inherits: false }`.
+ *
+ * `color-scheme` is deliberately NOT preserved: it resolves to initial `normal`,
+ * which is correct because the SDK drives light/dark via `[data-yv-theme]`, not
+ * the host's scheme. (It also can't be `inherit`ed — the minifier rewrites
+ * `color-scheme: inherit` to `normal`.)
+ *
+ * `:host` keeps a normal-case reset below as a secondary layer — it still handles
+ * non-!important host inheritance and resets the host box — but the wrapper is
+ * the actual guarantee. This whole block is a no-op in light-DOM (non-shadow)
+ * usage and in the document.head copy of these styles.
  *
  * See docs/adr/0005-shadow-dom-style-isolation.md.
  */
@@ -95,6 +116,17 @@ layer(yv-sdk-fonts);
   all: initial;
   writing-mode: inherit;
   text-orientation: inherit;
+}
+
+[data-yv-shadow-content] {
+  all: initial;
+  writing-mode: inherit;
+  text-orientation: inherit;
+  display: contents;
+  /* Neutralize bare var(--spacing) (tw-animate-css + an SDK arbitrary value),
+     which `all: initial` can't reset — see the block comment above for why this
+     is hardcoded rather than var(--yv-spacing). */
+  --spacing: 0.25rem; /* mirrors --yv-spacing */
 }
 
 /* #region shadcn UI theme */

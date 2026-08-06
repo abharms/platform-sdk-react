@@ -50,3 +50,44 @@ body {
   font-style: italic;
 }
 `;
+
+/**
+ * The sharpest inherited-property vector: a universal `!important` rule. Unlike
+ * `HOSTILE_INHERITED_CSS` (which sets inherited props on `body`, an ancestor),
+ * `*` also matches the shadow HOST element itself. On the host, an outer
+ * author-important declaration outranks the SDK's normal `:host` reset (and even
+ * a `:host { all: initial !important }`, per cross-shadow scoping) — so before
+ * the reset was moved onto an inner `[data-yv-shadow-content]` wrapper, these
+ * values inherited straight into the shadow content.
+ *
+ * The inner wrapper reset defeats this because no outer selector can match an
+ * element inside a shadow tree. Used by the shadow-isolation stories to prove it.
+ * See docs/adr/0005-shadow-dom-style-isolation.md.
+ */
+export const HOSTILE_UNIVERSAL_IMPORTANT_CSS = `
+* {
+  color: #d600d6 !important;
+  font-family: 'Comic Sans MS', 'Chalkboard SE', cursive !important;
+  letter-spacing: 0.25em !important;
+  text-transform: uppercase !important;
+}
+`;
+
+/**
+ * CSS custom-property vector. `all: initial` deliberately does NOT reset custom
+ * properties, and they inherit across the shadow boundary, so a host that
+ * overrides a var the SDK resolves at runtime without a shadow-local definition
+ * would bleed in. The real leak is bare `var(--spacing)` (from the unprefixed
+ * tw-animate-css import AND an SDK arbitrary value in bible-version-picker),
+ * neutralized by declaring `--spacing` on the `[data-yv-shadow-content]` wrapper.
+ * Every other var is already safe (`--yv-*` are shadow-local; `--tw-*` are
+ * `@property { inherits: false }`; `input-group`'s `--radius` was namespaced to
+ * `--yv-radius` at source).
+ *
+ * See docs/adr/0005-shadow-dom-style-isolation.md.
+ */
+export const HOSTILE_CUSTOM_PROPS_CSS = `
+:root, * {
+  --spacing: 48px !important;
+}
+`;
