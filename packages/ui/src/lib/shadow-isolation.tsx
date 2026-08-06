@@ -17,18 +17,18 @@ import { ShadowRootHost, useShadowRoot } from './shadow-root-host';
  * behavior suite renders components un-isolated. `@internal`, never exported —
  * see docs/adr/0005-shadow-dom-style-isolation.md.
  */
-let defaultDisabled = false;
+let defaultIsolationDisabled = false;
 
 /** @internal Test-only. Globally disable/enable default-on isolation. Do NOT export publicly. */
 export function __setShadowIsolationDisabledDefault(disabled: boolean): void {
-  defaultDisabled = disabled;
+  defaultIsolationDisabled = disabled;
 }
 
 /**
- * Per-subtree override of `defaultDisabled`. `undefined` (the default) defers to
- * the global flag. Dedicated `*.shadow-isolation.stories.tsx` provide `false`
- * via this provider to force isolation ON even when the environment default has
- * disabled it — so they can prove the self-wrap actually fires.
+ * Per-subtree override of `defaultIsolationDisabled`. `undefined` (the default)
+ * defers to the global flag. `true` disables isolation and `false` forces it on.
+ * Dedicated `*.shadow-isolation.stories.tsx` provide `false` so they can prove
+ * the self-wrap still fires when the environment default disables isolation.
  */
 const ShadowIsolationOverrideContext = createContext<boolean | undefined>(undefined);
 
@@ -42,6 +42,10 @@ export const ShadowIsolationOverrideProvider = ShadowIsolationOverrideContext.Pr
  * (`useShadowRoot() !== null`), it renders straight into that one instead of
  * nesting a redundant shadow root. Generalizes the pattern that shipped first on
  * `YouVersionAuthButton`.
+ *
+ * The ancestor check recognizes SDK-owned shadow roots through React context.
+ * A component rendered within a consumer-owned shadow root creates its own SDK
+ * shadow root, preserving the SDK's reset and style-injection guarantees.
  *
  * NOTE: `attachShadow` runs only in a client effect, so an isolated component
  * renders empty on first paint and pops in — the SSR/first-paint flash tracked
@@ -62,10 +66,11 @@ export function withShadowIsolation<P extends object>(
   const Wrapped = forwardRef(function ShadowIsolated(props, ref) {
     const override = useContext(ShadowIsolationOverrideContext);
     const alreadyIsolated = useShadowRoot() !== null;
-    // `createElement` (not JSX) so `ref` forwards to `Impl` whether or not it is
-    // itself a forwardRef component (a no-op ref for plain components).
+    // `createElement` keeps the generic implementation free of JSX/ref typing
+    // branches. The public overloads expose a ref only when `Impl` supports one.
     const element = createElement(Impl, { ...(props as P), ref } as unknown as P);
-    if ((override ?? defaultDisabled) || alreadyIsolated) return element;
+    const isolationDisabled = override ?? defaultIsolationDisabled;
+    if (isolationDisabled || alreadyIsolated) return element;
     return createElement(ShadowRootHost, null, element);
   });
   Wrapped.displayName = displayName ?? Impl.displayName ?? Impl.name;

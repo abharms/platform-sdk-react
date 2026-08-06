@@ -91,3 +91,20 @@ export const HOSTILE_CUSTOM_PROPS_CSS = `
   --spacing: 48px !important;
 }
 `;
+
+/**
+ * Every non-`@font-face` vector at once — the full barrage the all-exports
+ * regression harness fires at each component (see
+ * `all-exports.shadow-isolation.stories.tsx`). Deliberately excludes the
+ * `@font-face` hijack: font faces are document-scoped and reach inside shadow
+ * roots by design, so it's the one known, documented, deferred leak (ADR-0005)
+ * and would false-fail an otherwise-correct component. Everything here — type
+ * selectors, inherited props, host-targeting `!important`, and custom properties
+ * — MUST be fully blocked by the isolation wrapper.
+ */
+export const HOSTILE_ALL_VECTORS_CSS = [
+  HOSTILE_BUTTON_CSS,
+  HOSTILE_INHERITED_CSS,
+  HOSTILE_UNIVERSAL_IMPORTANT_CSS,
+  HOSTILE_CUSTOM_PROPS_CSS,
+].join('\n');

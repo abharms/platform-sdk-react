@@ -51,7 +51,7 @@ export type FootnoteContentProps = FootnoteData & {
   hasVerseContext?: boolean;
 };
 
-export function FootnoteContent({
+function FootnoteContentImpl({
   verseNum,
   notes,
   verseHtml,
@@ -97,6 +97,14 @@ export function FootnoteContent({
     </div>
   );
 }
+
+/**
+ * Public footnote panel. Wrapped so a standalone `<FootnoteContent />` isolates
+ * itself like every other exported component. Idempotent: rendered inside
+ * BibleTextView's / BibleReader's shadow root (its normal home) it passes through
+ * without nesting a second shadow root.
+ */
+export const FootnoteContent = withShadowIsolation(FootnoteContentImpl, 'FootnoteContent');
 
 type VerseFootnoteData = {
   verseNum: string;

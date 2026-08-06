@@ -1,8 +1,12 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 
-function Textarea({ className, ...props }: React.ComponentProps<'textarea'>): React.ReactElement {
+function TextareaImpl({
+  className,
+  ...props
+}: React.ComponentProps<'textarea'>): React.ReactElement {
   return (
     <textarea
       data-slot="textarea"
@@ -14,5 +18,9 @@ function Textarea({ className, ...props }: React.ComponentProps<'textarea'>): Re
     />
   );
 }
+
+// Wrapped so a standalone `<Textarea />` self-isolates like every other public
+// export. Idempotent inside an already-isolated SDK component.
+const Textarea = withShadowIsolation(TextareaImpl, 'Textarea');
 
 export { Textarea };

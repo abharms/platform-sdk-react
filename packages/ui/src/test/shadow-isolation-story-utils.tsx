@@ -1,6 +1,6 @@
 import { expect, waitFor } from 'storybook/test';
 import { getShadowRoot } from './shadow-dom-test-utils';
-import { HOSTILE_INHERITED_CSS } from './hostile-host-styles';
+import { HOSTILE_INHERITED_CSS, HOSTILE_ALL_VECTORS_CSS } from './hostile-host-styles';
 
 /** Injects/removes a hostile host `<style>` tag the way a bundled consumer app would. */
 export function hostStyleController(
@@ -107,4 +107,73 @@ export function assertInheritedStyleIsolation(
       void expect(p.letterSpacing).not.toBe('normal');
     },
   });
+}
+
+// Computed-style properties the hostile barrage targets. Compared before/after on
+// every element in a component's shadow tree to prove none of them shift. Kebab
+// names + getPropertyValue so standard props and the custom property read the same
+// way.
+const ISOLATION_PROBE_PROPS = [
+  'color',
+  'background-color',
+  'font-family',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'line-height',
+  'letter-spacing',
+  'word-spacing',
+  'text-transform',
+  'border-top-left-radius',
+  'padding-left',
+  '--spacing',
+] as const;
+
+/**
+ * Generic isolation proof used by the all-exports regression harness
+ * (`all-exports.shadow-isolation.stories.tsx`): snapshots the probed computed
+ * styles of EVERY element in a component's shadow tree, injects the full hostile
+ * barrage (`HOSTILE_ALL_VECTORS_CSS`), then asserts nothing changed.
+ *
+ * Snapshot → inject → re-read runs synchronously against the same element
+ * references, so no async content update can interleave and cause a false diff;
+ * any difference is therefore real host-CSS bleed. `@font-face` is excluded from
+ * the barrage (the one documented, deferred leak — see the fixture).
+ */
+export async function assertComponentIsolated(
+  canvasElement: HTMLElement,
+  opts: { styleId: string },
+): Promise<void> {
+  const shadowRoot = await getShadowRoot(canvasElement);
+  // Wait until the component has actually rendered content into its shadow root.
+  await waitFor(() => {
+    if (shadowRoot.querySelectorAll('*').length < 2) {
+      throw new Error('shadow root has not rendered content yet');
+    }
+  });
+
+  const elements = Array.from(shadowRoot.querySelectorAll<HTMLElement>('*'));
+  const before = elements.map((el) => {
+    const cs = getComputedStyle(el);
+    return ISOLATION_PROBE_PROPS.map((prop) => cs.getPropertyValue(prop).trim());
+  });
+
+  const host = hostStyleController(opts.styleId, HOSTILE_ALL_VECTORS_CSS);
+  try {
+    host.inject();
+    // Re-read the SAME elements synchronously (no await) so content can't change
+    // between snapshots — any diff is pure CSS bleed.
+    elements.forEach((el, elIndex) => {
+      const cs = getComputedStyle(el);
+      const label = `<${el.tagName.toLowerCase()} class="${el.getAttribute('class') ?? ''}">`;
+      ISOLATION_PROBE_PROPS.forEach((prop, propIndex) => {
+        void expect(
+          cs.getPropertyValue(prop).trim(),
+          `${label} "${prop}" changed under hostile CSS`,
+        ).toBe(before[elIndex]?.[propIndex]);
+      });
+    });
+  } finally {
+    host.remove();
+  }
 }

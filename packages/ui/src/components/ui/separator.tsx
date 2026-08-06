@@ -2,8 +2,9 @@ import * as React from 'react';
 import * as SeparatorPrimitive from '@radix-ui/react-separator';
 
 import { cn } from '@/lib/utils';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 
-function Separator({
+function SeparatorImpl({
   className,
   orientation = 'horizontal',
   decorative = true,
@@ -22,5 +23,10 @@ function Separator({
     />
   );
 }
+
+// Wrapped so a standalone `<Separator />` self-isolates like every other public
+// export. Idempotent: rendered inside an already-isolated SDK component (its
+// normal home) it passes through without nesting a shadow root.
+const Separator = withShadowIsolation(SeparatorImpl, 'Separator');
 
 export { Separator };
