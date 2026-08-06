@@ -4,6 +4,7 @@ import i18n from '@/i18n';
 import { IS_PRODUCTION } from '@/lib/constants';
 import { useDelayedLoading } from '@/lib/use-delayed-loading';
 import { cn } from '@/lib/utils';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 import {
   INTER_FONT,
   SOURCE_SERIF_FONT,
@@ -421,7 +422,9 @@ export function createBibleThemeSettingsContentHandlers(options: {
   };
 }
 
-function Root({
+const Root = withShadowIsolation(RootImpl, 'BibleReader.Root');
+
+function RootImpl({
   book: controlledBook,
   defaultBook = 'JHN',
   onBookChange,
@@ -1180,6 +1183,7 @@ function UserMenu() {
               name={userInfo?.name}
               src={userInfo?.getAvatarUrl(32, 32)?.toString()}
               aria-label={userInfo?.name || t('userAvatarAlt')}
+              theme={yvContext?.theme}
               className="yv:size-full"
             />
           </Button>
@@ -1220,7 +1224,12 @@ function UserMenu() {
   );
 }
 
-export function BibleThemeSettingsContent({
+export const BibleThemeSettingsContent = withShadowIsolation(
+  BibleThemeSettingsContentImpl,
+  'BibleThemeSettingsContent',
+);
+
+function BibleThemeSettingsContentImpl({
   theme,
   fontSize,
   fontFamily,

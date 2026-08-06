@@ -1,6 +1,8 @@
 import { ShadowRootHost } from '@/lib/shadow-root-host';
+import { ShadowIsolationOverrideProvider } from '@/lib/shadow-isolation';
 import { HOSTILE_BUTTON_CSS, HOSTILE_INHERITED_CSS } from '@/test/hostile-host-styles';
 import { getShadowRoot } from '@/test/shadow-dom-test-utils';
+import { hostStyleController } from '@/test/shadow-isolation-story-utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { createRef } from 'react';
 import { expect, fn, spyOn, userEvent, waitFor } from 'storybook/test';
@@ -15,7 +17,7 @@ import { YouVersionAuthButton } from './YouVersionAuthButton';
  *
  * `YouVersionAuthButton` has no Radix Portal/Dialog, so this only tests
  * style isolation — Radix-in-shadow-root behavior is a separate, deferred
- * concern (see docs/adr/0005-shadow-dom-style-isolation-spike.md).
+ * concern (see docs/adr/0005-shadow-dom-style-isolation.md).
  */
 
 let signInMock: ReturnType<typeof fn>;
@@ -43,18 +45,6 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Injects/removes a host-style `<style>` tag the same way a bundled consumer app would. */
-function hostStyleTagController(id: string, css: string) {
-  const inject = () => {
-    const el = document.createElement('style');
-    el.id = id;
-    el.textContent = css;
-    document.head.append(el);
-  };
-  const remove = () => document.getElementById(id)?.remove();
-  return { inject, remove };
-}
-
 export const StyleIsolation: Story = {
   tags: ['integration'],
   render: () => (
@@ -66,7 +56,7 @@ export const StyleIsolation: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const hostStyle = hostStyleTagController('shadow-isolation-hostile-style', HOSTILE_BUTTON_CSS);
+    const hostStyle = hostStyleController('shadow-isolation-hostile-style', HOSTILE_BUTTON_CSS);
 
     let controlButtonMaybe: HTMLButtonElement | null = null;
     await waitFor(() => {
@@ -150,7 +140,7 @@ export const InheritedStyleIsolation: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const hostStyle = hostStyleTagController(
+    const hostStyle = hostStyleController(
       'shadow-inherited-isolation-hostile-style',
       HOSTILE_INHERITED_CSS,
     );
@@ -208,20 +198,24 @@ export const InheritedStyleIsolation: Story = {
  * light-DOM control the hostile `button {}` rule clobbers. Note the SDK button
  * is reachable only through the shadow root it created for itself — that same
  * fact is why light-DOM Testing Library queries stop finding it once default-on
- * ships (see docs/adr/0005-shadow-dom-style-isolation-spike.md).
+ * ships (see docs/adr/0005-shadow-dom-style-isolation.md).
  */
 export const DefaultOnIsolation: Story = {
   tags: ['integration'],
-  // render: () => (
-  //   <div style={{ display: 'flex', gap: 24 }}>
-  //     <button type="button" data-testid="raw-control">
-  //       raw
-  //     </button>
-  //     <YouVersionAuthButton data-testid="default-on-button" />
-  //   </div>
-  // ),
+  render: () => (
+    // Force isolation ON (Storybook disables it by default via preview.tsx) so
+    // this proves the bare component self-wraps with no explicit ShadowRootHost.
+    <ShadowIsolationOverrideProvider value={false}>
+      <div style={{ display: 'flex', gap: 24 }}>
+        <button type="button" data-testid="raw-control">
+          raw
+        </button>
+        <YouVersionAuthButton data-testid="default-on-button" />
+      </div>
+    </ShadowIsolationOverrideProvider>
+  ),
   play: async ({ canvasElement }) => {
-    const hostStyle = hostStyleTagController('default-on-hostile-style', HOSTILE_BUTTON_CSS);
+    const hostStyle = hostStyleController('default-on-hostile-style', HOSTILE_BUTTON_CSS);
 
     // The SDK button self-isolates, so its <button> lives inside the
     // ShadowRootHost it created for itself — reachable only via the shadow root,

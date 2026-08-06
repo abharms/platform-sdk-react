@@ -14,4 +14,4 @@ Three separate defects, all reachable by pressing Tab inside an open picker:
 
 - **Tab-wraparound edge detection corrected.** The shadow-DOM-aware focus handler in the shared `Popover` computed its tabbable candidates with a plain selector match, which also picked up roving-tabindex elements (inactive Radix Tabs triggers are `tabindex="-1"`), elements in hidden subtrees, and `inert` ones. That could put "last" on an element the user can never reach, so the real last element's Tab went unhandled — which, inside a Shadow DOM tree, closed the popover instead of merely leaking focus. Candidate selection now mirrors Radix's own tabbable semantics.
 
-The first two defects affect all consumers; the third only affects components rendered inside a `ShadowRootHost`. See `docs/adr/0005-shadow-dom-style-isolation-spike.md` for the full investigation, including why none of this was caught by the existing tests.
+The first two defects affect all consumers; the third only affects components rendered inside a `ShadowRootHost`. See `docs/adr/0005-shadow-dom-style-isolation.md` for the full investigation, including why none of this was caught by the existing tests.

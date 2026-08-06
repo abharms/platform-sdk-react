@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 
 import { cn } from '../../lib/utils';
+import { useShadowPortal } from '../../lib/shadow-root-host';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTitle = DialogPrimitive.Title;
@@ -22,10 +23,14 @@ function DialogContent({
   className,
   theme = 'light',
   children,
+  onKeyDown,
   ...props
 }: DialogContentProps): React.ReactElement {
+  // Redirect the Portal into the current shadow root and install the
+  // shadow-aware focus trap on Content — both no-ops outside a `ShadowRootHost`.
+  const { portalProps, contentProps } = useShadowPortal(onKeyDown);
   return (
-    <DialogPrimitive.Portal>
+    <DialogPrimitive.Portal {...portalProps}>
       <DialogPrimitive.Overlay
         className={cn(
           'yv:fixed yv:inset-0 yv:z-50 yv:bg-black/50',
@@ -46,6 +51,7 @@ function DialogContent({
           'yv:data-[state=closed]:fade-out-0 yv:data-[state=open]:fade-in-0',
           'yv:data-[state=closed]:zoom-out-95 yv:data-[state=open]:zoom-in-95',
         )}
+        {...contentProps}
         {...props}
       >
         {children}

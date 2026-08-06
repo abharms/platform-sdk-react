@@ -2,12 +2,20 @@ import * as React from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 
 export interface ProfileAvatarProps extends React.ComponentProps<typeof Avatar> {
   /** Full display name; initials are used as the fallback. */
   name?: string | null;
   /** Profile image URL. Fallback renders while loading or on error. */
   src?: string | null;
+  /**
+   * Theme for the avatar's design tokens. Defaults to `light`. When nesting the
+   * avatar inside another themed SDK component (e.g. BibleReader), pass that
+   * component's theme so it matches — dark tokens are scoped to
+   * `[data-yv-sdk][data-yv-theme='dark']`, so a mismatched value renders light.
+   */
+  theme?: 'light' | 'dark';
 }
 
 /** "Cam Anderson" → "CA", "Cher" → "C". Names always include first (and usually last). */
@@ -21,36 +29,43 @@ function getInitials(name?: string | null): string {
 /**
  * Profile avatar: shows the user's image when available, otherwise their
  * initials ("CA" or "C") inside a bordered circle (YPE-3648).
+ *
+ * `data-yv-sdk`/`data-yv-theme` on the root are required so the SDK's design
+ * tokens resolve when the avatar is isolated in its own shadow root (they are
+ * scoped to `[data-yv-sdk]`); they are added here rather than by consumers.
  */
-export function ProfileAvatar({
-  name,
-  src,
-  className,
-  ...props
-}: ProfileAvatarProps): React.ReactNode {
-  const initial = getInitials(name);
-  const [imageLoaded, setImageLoaded] = React.useState(false);
-  return (
-    <Avatar
-      aria-label={name?.trim() || undefined}
-      className={cn(src && imageLoaded && 'yv:bg-(--yv-gray-10) yv:p-[3px]', className)}
-      {...props}
-    >
-      {src ? (
-        <AvatarImage
-          src={src}
-          alt=""
-          className="yv:rounded-full"
-          onLoadingStatusChange={(status) => setImageLoaded(status === 'loaded')}
-        />
-      ) : null}
-      <AvatarFallback
-        className={cn(
-          'yv:border-2 yv:border-foreground yv:bg-background yv:font-sans yv:text-xs yv:font-bold yv:text-foreground',
-        )}
+const ProfileAvatarImpl = React.forwardRef<React.ComponentRef<typeof Avatar>, ProfileAvatarProps>(
+  ({ name, src, className, theme = 'light', ...props }, ref): React.ReactNode => {
+    const initial = getInitials(name);
+    const [imageLoaded, setImageLoaded] = React.useState(false);
+    return (
+      <Avatar
+        ref={ref}
+        data-yv-sdk
+        data-yv-theme={theme}
+        aria-label={name?.trim() || undefined}
+        className={cn(src && imageLoaded && 'yv:bg-(--yv-gray-10) yv:p-[3px]', className)}
+        {...props}
       >
-        {initial}
-      </AvatarFallback>
-    </Avatar>
-  );
-}
+        {src ? (
+          <AvatarImage
+            src={src}
+            alt=""
+            className="yv:rounded-full"
+            onLoadingStatusChange={(status) => setImageLoaded(status === 'loaded')}
+          />
+        ) : null}
+        <AvatarFallback
+          className={cn(
+            'yv:border-2 yv:border-foreground yv:bg-background yv:font-sans yv:text-xs yv:font-bold yv:text-foreground',
+          )}
+        >
+          {initial}
+        </AvatarFallback>
+      </Avatar>
+    );
+  },
+);
+ProfileAvatarImpl.displayName = 'ProfileAvatarImpl';
+
+export const ProfileAvatar = withShadowIsolation(ProfileAvatarImpl, 'ProfileAvatar');

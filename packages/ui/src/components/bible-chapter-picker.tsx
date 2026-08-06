@@ -2,6 +2,7 @@
 
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 import {
   cloneElement,
   createContext,
@@ -79,7 +80,9 @@ export type RootProps = {
 
 export type BibleChapterPickerRootProps = RootProps;
 
-function Root({
+const Root = withShadowIsolation(RootImpl, 'BibleChapterPicker.Root');
+
+function RootImpl({
   book: controlledBook,
   defaultBook = '',
   onBookChange,

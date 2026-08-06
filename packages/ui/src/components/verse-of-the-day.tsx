@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { BibleTextView } from '@/components/verse';
 import { DEFAULT_LICENSE_FREE_BIBLE_VERSION } from '@youversion/platform-core';
 import { cn } from '@/lib/utils';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 
 export type VerseOfTheDayShareData = {
   /** Full share body: verse text, blank line, then reference (same as Web Share `text`). */
@@ -118,7 +119,9 @@ async function share({
  * />
  * ```
  */
-export function VerseOfTheDay({
+export const VerseOfTheDay = withShadowIsolation(VerseOfTheDayImpl, 'VerseOfTheDay');
+
+function VerseOfTheDayImpl({
   background,
   dayOfYear,
   versionId = DEFAULT_LICENSE_FREE_BIBLE_VERSION,

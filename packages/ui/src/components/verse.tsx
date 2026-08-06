@@ -19,6 +19,7 @@ import { LoaderIcon } from '@/components/icons/loader';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { getBibleTextErrorMessage } from '@/lib/bible-text-error';
 import { cn } from '@/lib/utils';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 import { type FontFamily } from '@/lib/verse-html-utils';
 
 import { transformBibleHtml } from '@youversion/platform-core/browser';
@@ -537,7 +538,7 @@ export type BibleTextViewProps = {
 /**
  * A component that renders style Bible text.
  */
-export const BibleTextView = forwardRef<HTMLDivElement, BibleTextViewProps>(
+const BibleTextViewImpl = forwardRef<HTMLDivElement, BibleTextViewProps>(
   (
     {
       reference,
@@ -635,3 +636,5 @@ export const BibleTextView = forwardRef<HTMLDivElement, BibleTextViewProps>(
     );
   },
 );
+
+export const BibleTextView = withShadowIsolation(BibleTextViewImpl, 'BibleTextView');

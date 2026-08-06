@@ -1,5 +1,14 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEventHandler,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
+import { createShadowAwareFocusTrap } from './shadow-focus-trap';
 
 declare const __YV_STYLES__: string;
 
@@ -7,10 +16,34 @@ const ShadowRootContext = createContext<ShadowRoot | null>(null);
 
 /**
  * @internal Experimental Shadow DOM style-isolation primitive — spike, not a
- * stable API. See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+ * stable API. See docs/adr/0005-shadow-dom-style-isolation.md.
  */
 export function useShadowRoot(): ShadowRoot | null {
   return useContext(ShadowRootContext);
+}
+
+/**
+ * Couples the two things a shadow-isolated Radix portal always needs together:
+ * redirecting the `Portal` into the current shadow root, and installing the
+ * shadow-aware focus trap on the portalled `Content`. Bundling them means a new
+ * portalled primitive can't wire the container but forget the trap — which
+ * would silently re-introduce the focus-leak this feature exists to fix. Both
+ * are no-ops outside a `ShadowRootHost` (`container` falls back to
+ * `document.body`; the trap early-returns). See shadow-focus-trap.ts.
+ *
+ * @internal Experimental, alongside `ShadowRootHost`.
+ */
+export function useShadowPortal<T extends HTMLElement = HTMLElement>(
+  contentOnKeyDown?: KeyboardEventHandler<T>,
+): {
+  portalProps: { container: ShadowRoot | null };
+  contentProps: { onKeyDown: KeyboardEventHandler<T> };
+} {
+  const shadowRoot = useShadowRoot();
+  return {
+    portalProps: { container: shadowRoot },
+    contentProps: { onKeyDown: createShadowAwareFocusTrap<T>(shadowRoot, contentOnKeyDown) },
+  };
 }
 
 // Built once, lazily, on first attach — never at module import time, so this
@@ -53,7 +86,7 @@ export interface ShadowRootHostProps {
  * containers into the same shadow tree instead of the default
  * `document.body`.
  *
- * See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+ * See docs/adr/0005-shadow-dom-style-isolation.md.
  */
 export function ShadowRootHost({ children }: ShadowRootHostProps): React.ReactNode {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -61,9 +94,15 @@ export function ShadowRootHost({ children }: ShadowRootHostProps): React.ReactNo
   const [needsStyleTagFallback, setNeedsStyleTagFallback] = useState(false);
 
   useEffect(() => {
-    if (!hostRef.current || shadowRoot) return;
+    const host = hostRef.current;
+    // Guard on the DOM (`host.shadowRoot`), NOT the `shadowRoot` state: under
+    // React StrictMode the mount effect runs twice against the same committed
+    // render (the state closure is still null on the second run), so a
+    // state-based guard would call `attachShadow` twice on the same host and
+    // throw `NotSupportedError`. Checking the live shadow root is StrictMode-safe.
+    if (!host || host.shadowRoot) return;
 
-    const root = hostRef.current.attachShadow({ mode: 'open' });
+    const root = host.attachShadow({ mode: 'open' });
     if (supportsAdoptedStyleSheets(root)) {
       root.adoptedStyleSheets = [getOrCreateSdkStyleSheet()];
     } else {

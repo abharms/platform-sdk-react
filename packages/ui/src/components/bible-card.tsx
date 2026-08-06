@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { BibleTextView, type FootnoteData } from './verse';
 import { BibleAppLogoLockup } from './bible-app-logo-lockup';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 import { BibleVersionPicker, type BibleVersionPickerPressData } from './bible-version-picker';
 import { Button } from './ui/button';
 import { useControllableState } from '@radix-ui/react-use-controllable-state';
@@ -108,7 +109,9 @@ function BibleCardFooter({ copyright }: { copyright?: string | null }): React.Re
   );
 }
 
-export function BibleCard({
+export const BibleCard = withShadowIsolation(BibleCardImpl, 'BibleCard');
+
+function BibleCardImpl({
   reference,
   versionId: controlledVersionId,
   defaultVersionId = DEFAULT_LICENSE_FREE_BIBLE_VERSION,

@@ -189,33 +189,52 @@ next version bump — accepted as a normal breaking change (see Consequences).
 
 ## Next Steps
 
-In priority order:
+**Update (2026-08) — the default-on rollout is complete.** Every exported
+component self-isolates in a shadow root by default via a shared HOC
+(`withShadowIsolation`, `packages/ui/src/lib/shadow-isolation.tsx`), idempotent
+when nested (a component skips wrapping if already inside a shadow root, so
+compound components share one root). Dialog and the verse-action popover reached
+portal parity with Popover using an extracted shared focus-trap
+(`packages/ui/src/lib/shadow-focus-trap.ts`). A test-only escape hatch (set from
+`src/test/setup.ts` and `.storybook/preview.tsx`, `@internal`/unexported)
+renders components un-isolated in the behavior suite, so the existing ~464 tests
+stay green; isolation is proven in browser-mode `*.shadow-isolation.stories.tsx`
+for `YouVersionAuthButton`, `BibleVersionPicker` (13 interaction tests),
+`ProfileAvatar`, and `BibleReader` — the last verifying the **raw** verse-action
+portal lands inside the shadow root, not `document.body`.
 
-1. **Close the inherited-property gap** (see Context note) — a bounded one-time
-   reset of inherited properties at the shadow root, plus a hostile fixture that
-   exercises `letter-spacing`/`text-transform`/`color`, not just `button {}`.
-   Without this the "no matter what" guarantee is not actually met.
-2. **Finish Popover verification** — real assistive-tech behavior
-   (VoiceOver/NVDA) is still untested; only the structural ARIA relationship is
-   confirmed. Also audit other components for `opacity`/`visibility`-hidden
-   content left in the tab order.
-3. **Bring Radix Dialog to parity with Popover** — same `container`-redirect,
-   tested against `sign-in-dialog.tsx`/`highlight-permission-dialog.tsx`. A
-   different primitive; Popover's result doesn't extend automatically.
-4. **Resolve portal-clipping vs. body-escape.** Radix portals to `document.body`
-   to escape ancestor `overflow`/clipping; redirecting into a locally-nested
-   shadow root reintroduces that risk. An architectural decision (where shadow
-   roots attach), not just code.
-5. **Keep tokens flat; expand props as gaps surface.** Customization is
-   props-only (see Decision), so there is no CSS-vars layer to build — tokens
-   stay flat/internal. Adding a prop for a real gap is ordinary product work;
-   promoting a token to a public, host-overridable variable is a deliberate
+Done: the original #1 (inherited-property reset), #3 (Dialog parity), and #6
+(full default-on rollout).
+
+Still open, in priority order:
+
+1. **Portal-clipping vs. body-escape.** Redirecting portals into a locally-
+   nested shadow root reintroduces the ancestor `overflow`/clipping risk that
+   Radix's `document.body` portal avoided. An architectural decision (where
+   shadow roots attach), untested at real consumer densities.
+2. **SSR/first-paint flash — now global.** Every isolated component paints empty
+   on first client mount. The mitigation is declarative Shadow DOM (DSD).
+   `react-shadow` (v20.6.0 — verified from its published source) already
+   implements this: with its `ssr` prop it emits `<template shadowrootmode>`
+   server-side via `renderToString` and reads the existing `shadowRoot` on the
+   client instead of re-attaching. Its core is otherwise identical to our
+   `ShadowRootHost` (same `attachShadow` + `adoptedStyleSheets` + `createPortal`
+   + `useShadowRoot` context), so the scoped decision here is: adopt
+   `react-shadow`, or port that ~10-line DSD technique into `ShadowRootHost`.
+   Same root cause, worth fixing together: because the impl isn't rendered until
+   the shadow attaches in an effect, a **forwarded ref resolves `null` on the
+   consumer's first mount effect** (it becomes available one commit later). A
+   synchronous-attach / DSD path addresses both the flash and the ref timing.
+3. **Remaining isolation stories** (the other 7 components) — mechanical
+   re-proofs of the same mechanism; a safety-net follow-up, not a gap in the
+   implementation.
+4. **Assistive-tech + a11y** — real VoiceOver/NVDA passes; the pre-existing
+   tab-ORDER bugs (positive `tabIndex`, `opacity`-hidden panels in the tab
+   order) remain deferred, and are distinct from the shadow focus-trap (done).
+5. **Expand props as gaps surface** — tokens stay flat/internal (props-only);
+   promoting a token to a public host-overridable variable is a deliberate
    exception, not the default path.
-6. **Roll out to the rest of the component surface** — shadow rendering baked
-   into each component internally (no consumer-facing wrapper), with one
-   shared-shadow-root decision per compound component (`BibleReader`,
-   `BibleChapterPicker`, `BibleVersionPicker`).
-7. **Longer-horizon:** external code review; cross-browser verification
-   (Chromium-only so far); SSR-flash mitigation (declarative Shadow DOM);
-   Untitled Serif `@font-face`-crossing verification; productionize
-   `ShadowRootHost`/`useShadowRoot` from `@internal` to stable.
+6. **Longer-horizon:** external code review; cross-browser verification
+   (Chromium-only so far); Untitled Serif `@font-face`-crossing verification;
+   productionizing `ShadowRootHost`/`useShadowRoot` — kept `@internal` for now,
+   since consumers no longer need them (components self-isolate).

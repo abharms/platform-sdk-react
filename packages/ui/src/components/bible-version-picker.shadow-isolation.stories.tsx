@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { userEvent, expect, waitFor } from 'storybook/test';
 import { BibleVersionPicker, type RootProps } from './bible-version-picker';
 import { ShadowRootHost } from '@/lib/shadow-root-host';
+import { FOCUSABLE_SELECTOR, isTabbable } from '@/lib/shadow-focus-trap';
 import { getShadowRoot } from '@/test/shadow-dom-test-utils';
 
 /**
@@ -13,7 +14,7 @@ import { getShadowRoot } from '@/test/shadow-dom-test-utils';
  * component's actual version-selection logic still work once genuinely
  * inside a shadow tree — not just a simplified stand-in primitive.
  *
- * See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+ * See docs/adr/0005-shadow-dom-style-isolation.md.
  */
 
 function ShadowPickerWrapper({ versionId: initialVersionId = 111, ...props }: RootProps) {
@@ -177,19 +178,11 @@ export const SelectingAVersionUpdatesTheTrigger: Story = {
  *    Escape-key tests, which dispatch the same way).
  */
 
-// Mirrors the tabbable filter in ui/popover.tsx. A plain selector match is not
-// equivalent: it picks up roving-tabindex elements (inactive Radix Tabs
-// triggers are `tabindex="-1"`) and elements inside hidden/collapsed subtrees,
-// so its "last candidate" can be an element the user can never reach.
+// The tabbable filter is centralized in shadow-focus-trap.ts — reuse it rather
+// than re-deriving a subtly-different copy (a plain selector match is not
+// equivalent; see `isTabbable`).
 function getTabbableCandidates(container: Element): HTMLElement[] {
-  return Array.from(
-    container.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]'),
-  ).filter((element) => {
-    if (element.hasAttribute('disabled') || element.hidden) return false;
-    if (element.tabIndex < 0) return false;
-    if (element.closest('[inert]')) return false;
-    return element.checkVisibility({ visibilityProperty: true });
-  });
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isTabbable);
 }
 
 function dispatchTabKeydown(target: HTMLElement, { shift = false } = {}): void {

@@ -12,6 +12,14 @@ import { initialize, mswLoader } from 'msw-storybook-addon';
 import { StorybookEnvCheck } from '../src/test/StorybookEnvCheck';
 import { YouVersionProvider } from '../src/components/YouVersionProvider';
 import { globalHandlers } from '../src/test/mocks/handlers';
+import { __setShadowIsolationDisabledDefault } from '../src/lib/shadow-isolation';
+
+// Render SDK components un-isolated in Storybook by default so existing behavior
+// stories' light-DOM queries (within(canvasElement)) keep working. Dedicated
+// *.shadow-isolation.stories.tsx force isolation back ON via
+// `ShadowIsolationOverrideProvider value={false}`. See
+// docs/adr/0005-shadow-dom-style-isolation.md.
+__setShadowIsolationDisabledDefault(true);
 
 const THEME_BACKGROUNDS: Record<string, string> = {
   light: '#ffffff',

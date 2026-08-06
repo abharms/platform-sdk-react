@@ -1,7 +1,7 @@
 /**
  * A representative excerpt of a host app's unlayered global CSS — the exact
  * shape of bug described in the Shadow DOM style-isolation spike (see
- * docs/adr/0005-shadow-dom-style-isolation-spike.md). Mirrors the `button {}`
+ * docs/adr/0005-shadow-dom-style-isolation.md). Mirrors the `button {}`
  * rule from the local (not shipped in this repo) reproduction harness used
  * to originally demonstrate the bug.
  *
@@ -40,7 +40,7 @@ button {
  *
  * Every property here is inherited (verified against MDN). Used by
  * `YouVersionAuthButton.shadow-isolation.stories.tsx` to prove the reset.
- * See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+ * See docs/adr/0005-shadow-dom-style-isolation.md.
  */
 export const HOSTILE_INHERITED_CSS = `
 body {

@@ -25,6 +25,7 @@ import {
   useState,
 } from 'react';
 import { cn } from '@/lib/utils';
+import { withShadowIsolation } from '@/lib/shadow-isolation';
 import { ArrowLeftIcon } from './icons/arrow-left';
 import { GlobeIcon } from './icons/globe';
 import { LoaderIcon } from './icons/loader';
@@ -241,7 +242,9 @@ export type BibleVersionPickerLanguageTriggerProps = Omit<
   'children'
 >;
 
-function Root({
+const Root = withShadowIsolation(RootImpl, 'BibleVersionPicker.Root');
+
+function RootImpl({
   versionId: controlledVersionId,
   onVersionChange,
   languageId: controlledLanguageId,
@@ -661,7 +664,7 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
           Both panels stay mounted for the crossfade. opacity/pointer-events
           don't remove an element from the tab order — only `inert` does, and
           without touching layout so the animation is unaffected.
-          See docs/adr/0005-shadow-dom-style-isolation-spike.md.
+          See docs/adr/0005-shadow-dom-style-isolation.md.
         */}
         <div className="yv:relative yv:min-h-0 yv:overflow-hidden">
           <div

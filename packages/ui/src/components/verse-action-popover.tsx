@@ -3,6 +3,8 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import { cn } from '../lib/utils';
+import { useShadowPortal } from '../lib/shadow-root-host';
+import { withShadowIsolation } from '../lib/shadow-isolation';
 import { BoxStackIcon } from './icons/box-stack';
 import { BoxArrowUpIcon } from './icons/box-arrow-up';
 import { CheckIcon } from './icons/check';
@@ -155,7 +157,7 @@ function ActionButton({ icon, label, onClick }: ActionButtonProps) {
   );
 }
 
-export const VerseActionPopover: FC<VerseActionPopoverProps> = ({
+const VerseActionPopoverImpl: FC<VerseActionPopoverProps> = ({
   open,
   onOpenChange,
   activeHighlights,
@@ -171,6 +173,9 @@ export const VerseActionPopover: FC<VerseActionPopoverProps> = ({
   theme = 'light',
 }) => {
   const { t } = useTranslation(undefined, { i18n });
+  // Redirect the Portal into the current shadow root and install the
+  // shadow-aware focus trap on Content — both no-ops outside a `ShadowRootHost`.
+  const { portalProps, contentProps } = useShadowPortal();
 
   // On open, Radix's FocusScope would autofocus the first swatch. Because the bar
   // opens from a mouse/tap on non-focusable verse text, Chromium treats that
@@ -334,7 +339,7 @@ export const VerseActionPopover: FC<VerseActionPopoverProps> = ({
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <PopoverPrimitive.Anchor virtualRef={view.virtualRef} />
-      <PopoverPrimitive.Portal>
+      <PopoverPrimitive.Portal {...portalProps}>
         <PopoverPrimitive.Content
           ref={contentRef}
           role="dialog"
@@ -342,6 +347,7 @@ export const VerseActionPopover: FC<VerseActionPopoverProps> = ({
           tabIndex={-1}
           data-yv-sdk
           data-yv-theme={theme}
+          {...contentProps}
           onOpenAutoFocus={(event) => {
             // Keep focus contained in the popover but off the first swatch: land
             // it on the (non-tabbable) content element so no `:focus-visible` ring
@@ -462,3 +468,5 @@ export const VerseActionPopover: FC<VerseActionPopoverProps> = ({
     </PopoverPrimitive.Root>
   );
 };
+
+export const VerseActionPopover = withShadowIsolation(VerseActionPopoverImpl, 'VerseActionPopover');
