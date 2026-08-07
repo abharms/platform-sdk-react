@@ -45,13 +45,40 @@ function App() {
 
 All component CSS is automatically injected when you wrap your app with `YouVersionProvider` — no extra imports or build steps needed. Under the hood, it uses React 19's [`<style precedence>`](https://react.dev/reference/react-dom/components/style) to hoist styles into `<head>` with built-in deduplication and SSR/Suspense support.
 
+### Shadow DOM isolation
+
+Visual components render inside open Shadow DOM roots by default. Host-page selectors —
+including Tailwind preflight, global element rules such as `button {}`, and broad
+`!important` declarations — cannot select or restyle component internals. You do not
+need to remove or weaken your application's global CSS.
+
+This also means global selectors are not a supported customization mechanism. Use each
+component's documented props and `YouVersionProvider` theme options. If you need full
+control over markup and styling, use `@youversion/platform-react-hooks` to build your own
+UI on the headless data layer.
+
+Shadow roots change DOM inspection and testing behavior. Browser automation should use
+shadow-aware locators; Playwright locators pierce open shadow roots by default. With DOM
+Testing Library, query from the component host's `shadowRoot` rather than from
+`document.body`.
+
+Overlays are rendered inside the component's shadow tree to preserve style isolation.
+An ancestor with `overflow: hidden`, a restrictive stacking context, or similar layout
+constraints can clip or layer a popover/dialog beneath host content. Place overlay-based
+components in a container that allows their content to extend beyond its bounds.
+
+Shadow roots attach on the client after mount. Server-rendered isolated components have
+an empty host until hydration completes, and a forwarded DOM ref becomes available on a
+subsequent commit rather than during the consumer's first mount effect.
+
 **Non-React or manual CSS import:**
 
 ```tsx
 import '@youversion/platform-react-ui/styles.css';
 ```
 
-All component classes are prefixed with `yv:` to avoid collisions with your app's styles. Override design tokens with CSS variables on `[data-yv-sdk]` (see [Custom CSS variables](#custom-css-variables)).
+All component classes are prefixed with `yv:` to avoid class-name collisions inside the
+SDK stylesheet.
 
 ### Content Security Policy
 
@@ -67,6 +94,11 @@ style-src https://fonts.googleapis.com https://api.youversion.com;
 - `cdn.youversion.com` — the Untitled Serif woff2 files that stylesheet points at
 
 Untitled Serif is YouVersion's brand serif and the SDK's default serif face. There is no prop to turn it off. If these hosts are blocked, serif text falls back to Source Serif 4 with no layout break — the stack is `'Untitled Serif', 'Source Serif 4', serif`. If you load Untitled Serif yourself, your copy is used; the stack names it first regardless of who fetched it.
+
+Font-face names are document-scoped rather than shadow-scoped. If a host application
+registers a different face under `Inter`, `Untitled Serif`, or `Source Serif 4`, SDK text
+requesting that public family name can use the host's face. This is the one known
+host-style collision that Shadow DOM cannot prevent.
 
 ## Theming
 
@@ -135,15 +167,11 @@ Individual components accept a `background` prop to override the provider theme 
 </YouVersionProvider>
 ```
 
-### Custom CSS variables
+### Customization
 
-```css
-[data-yv-sdk] {
-  --yv-primary: #your-primary-color;
-  --yv-background: #your-background-color;
-  --yv-reader-font-size: 18px;
-}
-```
+Use documented component props and provider theme options for supported customization.
+Host-page CSS variables and selectors do not cross the component's shadow boundary. For
+custom markup or styling beyond those APIs, use `@youversion/platform-react-hooks`.
 
 ## Documentation and API Reference
 * [developers.youversion.com/sdks/react](https://developers.youversion.com/sdks/react)

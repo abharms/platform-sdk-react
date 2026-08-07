@@ -50,7 +50,7 @@ button, input, [role="button"] {
   {
     key: 'inherited',
     label: 'Inherited-property attack',
-    note: 'body {} inherited props (incl. font-family/size/line-height) — tests :host { all: initial }.',
+    note: 'body {} inherited props (incl. font-family/size/line-height) — tests the authoritative inner-wrapper reset.',
     css: `
 body {
   letter-spacing: 0.3em !important;
@@ -76,9 +76,21 @@ body {
 }`,
   },
   {
+    key: 'shadow-host-box',
+    label: 'Shadow-host box attack',
+    note: 'Targets the light-DOM shadow host with display / opacity / pointer-events / transform — tests that host CSS cannot hide or disable the entire SDK component.',
+    css: `
+[data-testid='shadow-root-host'], [data-host-box-witness] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(0.5) !important;
+}`,
+  },
+  {
     key: 'custom-props',
     label: 'CSS custom-property attack',
-    note: 'Overrides --spacing / --radius at :root. all:initial does NOT reset custom properties, and they inherit across the boundary. NOTE: this host app’s own layout also loosens (it uses these vars too) — that is the host breaking, which is expected. Watch the light-DOM witness box balloon while the SDK components keep their spacing/corners.',
+    note: 'Overrides bare --spacing, which the SDK consumes and resets inside the shadow tree. --radius is included only for the light-DOM witness; SDK radius variables are namespaced.',
     css: `
 :root, * {
   --spacing: 12px !important;
@@ -86,9 +98,21 @@ body {
 }`,
   },
   {
+    key: 'sdk-tokens',
+    label: 'SDK design-token attack',
+    note: 'Overrides --yv-* Tailwind tokens on the shadow host — tests that the build-generated inner-wrapper token copy wins inside the shadow tree.',
+    css: `
+:root, * {
+  --yv-spacing: 48px !important;
+  --yv-radius-2xl: 0px !important;
+  --yv-container-sm: 100rem !important;
+  --yv-text-base: 40px !important;
+}`,
+  },
+  {
     key: 'font-face',
     label: '@font-face hijack',
-    note: "Redefines 'Inter' / 'Untitled Serif' to a system novelty font. Font faces are document-scoped and apply INSIDE shadow roots — isolation can’t block this.",
+    note: "Redefines 'Inter' / 'Untitled Serif' / 'Source Serif 4' to a system novelty font. Font faces are document-scoped and apply INSIDE shadow roots — isolation can’t block this.",
     css: `
 @font-face {
   font-family: 'Inter';
@@ -97,18 +121,24 @@ body {
 @font-face {
   font-family: 'Untitled Serif';
   src: local('Chalkboard SE'), local('Comic Sans MS');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  src: local('Chalkboard SE'), local('Comic Sans MS');
 }`,
   },
 ];
 
 export function HostileCssPage() {
-  // The two original vectors default on; the three new ones default off so each
+  // The two original vectors default on; the remaining ones default off so each
   // can be observed in isolation.
   const [enabled, setEnabled] = useState<Record<string, boolean>>({
     'type-selectors': true,
     inherited: true,
     'universal-important': false,
+    'shadow-host-box': false,
     'custom-props': false,
+    'sdk-tokens': false,
     'font-face': false,
   });
   const [versionId, setVersionId] = useState(111);
@@ -172,6 +202,13 @@ export function HostileCssPage() {
           <p style={{ fontFamily: 'Inter, sans-serif' }}>
             Paragraph requesting <code>Inter</code> — the @font-face hijack should change this.
           </p>
+          <p style={{ fontFamily: "'Source Serif 4', serif" }}>
+            Paragraph requesting <code>Source Serif 4</code> — the @font-face hijack should change
+            this.
+          </p>
+          <div data-host-box-witness>
+            Light-DOM host-box witness — this disappears when that attack is enabled.
+          </div>
           {/* Direct witness for the custom-property attack: consumes --spacing
               (padding) and --radius (corners), so it visibly balloons when that
               vector is on, while the SDK components next door stay put. */}
@@ -184,6 +221,17 @@ export function HostileCssPage() {
           >
             Light-DOM witness — padding <code>var(--spacing)</code>, corners{' '}
             <code>var(--radius)</code>. The custom-property attack balloons this.
+          </div>
+          <div
+            style={{
+              padding: 'var(--yv-spacing)',
+              borderRadius: 'var(--yv-radius-2xl)',
+              fontSize: 'var(--yv-text-base)',
+              border: '2px solid currentColor',
+            }}
+          >
+            Light-DOM SDK-token witness — padding <code>var(--yv-spacing)</code>, corners{' '}
+            <code>var(--yv-radius-2xl)</code>, type <code>var(--yv-text-base)</code>.
           </div>
         </section>
 
