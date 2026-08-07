@@ -14,6 +14,7 @@ import {
 } from '@/test/shadow-isolation-story-utils';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { createRef, type ReactElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { expect, fn, spyOn, userEvent, waitFor } from 'storybook/test';
 import { YouVersionAuthButton } from './YouVersionAuthButton';
 
@@ -348,5 +349,45 @@ export const RefAndEventsAcrossShadowBoundary: Story = {
     await waitFor(() => {
       void expect(signInMock).toHaveBeenCalled();
     });
+  },
+};
+
+/** Constructed stylesheets are document-bound; an iframe needs its own cached copy. */
+export const MountsInsideSameOriginIframe: Story = {
+  tags: ['integration'],
+  parameters: divStoryParameters,
+  render: () => <iframe data-testid="iframe-host" title="Same-origin SDK mount" />,
+  play: async ({ canvasElement }) => {
+    const iframe = canvasElement.querySelector<HTMLIFrameElement>('[data-testid="iframe-host"]');
+    if (!iframe?.contentDocument) throw new Error('same-origin iframe document not available');
+
+    const container = iframe.contentDocument.createElement('div');
+    iframe.contentDocument.body.append(container);
+    const reactRoot = createRoot(container);
+
+    try {
+      reactRoot.render(
+        <ShadowRootHost>
+          <div data-testid="iframe-shadow-content">YouVersion</div>
+        </ShadowRootHost>,
+      );
+
+      const host = await waitFor(() => {
+        const element = iframe.contentDocument?.querySelector<HTMLElement>(
+          '[data-testid="shadow-root-host"]',
+        );
+        if (!element?.shadowRoot) throw new Error('iframe shadow root not attached');
+        return element;
+      });
+
+      void expect(host.ownerDocument).toBe(iframe.contentDocument);
+      void expect(host.shadowRoot?.ownerDocument).toBe(iframe.contentDocument);
+      void expect(host.shadowRoot?.adoptedStyleSheets).toHaveLength(1);
+      void expect(
+        host.shadowRoot?.querySelector('[data-testid="iframe-shadow-content"]'),
+      ).not.toBeNull();
+    } finally {
+      reactRoot.unmount();
+    }
   },
 };

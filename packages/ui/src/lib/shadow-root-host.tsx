@@ -60,26 +60,38 @@ export function useShadowPortal<T extends HTMLElement = HTMLElement>(
   };
 }
 
-// Built once, lazily, on first attach — never at module import time, so this
-// stays side-effect-free on import (see packages/ui/CLAUDE.md). Shared across
-// every ShadowRootHost instance so the CSS is parsed once regardless of how
-// many shadow-wrapped components exist on a page.
-let sdkStyleSheet: CSSStyleSheet | undefined;
+// Built lazily, never at module import time, so this stays side-effect-free on
+// import (see packages/ui/CLAUDE.md). Constructed stylesheets cannot be adopted
+// across Documents, so cache one per owner document (same-origin iframes are a
+// supported React portal/render target) while still parsing the CSS only once
+// for all ShadowRootHost instances in that document.
+const sdkStyleSheets = new WeakMap<Document, CSSStyleSheet>();
+
+function getStyleSheetConstructor(root: ShadowRoot): typeof CSSStyleSheet | undefined {
+  return root.ownerDocument.defaultView?.CSSStyleSheet;
+}
 
 function supportsAdoptedStyleSheets(root: ShadowRoot): boolean {
+  const StyleSheet = getStyleSheetConstructor(root);
   return (
-    typeof CSSStyleSheet !== 'undefined' &&
-    typeof CSSStyleSheet.prototype.replaceSync === 'function' &&
+    StyleSheet !== undefined &&
+    typeof StyleSheet.prototype.replaceSync === 'function' &&
     'adoptedStyleSheets' in root
   );
 }
 
-function getOrCreateSdkStyleSheet(): CSSStyleSheet {
-  if (!sdkStyleSheet) {
-    sdkStyleSheet = new CSSStyleSheet();
-    sdkStyleSheet.replaceSync(__YV_STYLES__);
-  }
-  return sdkStyleSheet;
+function getOrCreateSdkStyleSheet(root: ShadowRoot): CSSStyleSheet {
+  const ownerDocument = root.ownerDocument;
+  const existing = sdkStyleSheets.get(ownerDocument);
+  if (existing) return existing;
+
+  // Called only after supportsAdoptedStyleSheets(root), so this constructor and
+  // replaceSync are known to exist in the owner document's realm.
+  const StyleSheet = getStyleSheetConstructor(root)!;
+  const sheet = new StyleSheet();
+  sheet.replaceSync(__YV_STYLES__);
+  sdkStyleSheets.set(ownerDocument, sheet);
+  return sheet;
 }
 
 /**
@@ -135,7 +147,7 @@ export function ShadowRootHost({ children }: ShadowRootHostProps): React.ReactNo
     resetShadowHostStyles(host);
     const root = host.attachShadow({ mode: 'open' });
     if (supportsAdoptedStyleSheets(root)) {
-      root.adoptedStyleSheets = [getOrCreateSdkStyleSheet()];
+      root.adoptedStyleSheets = [getOrCreateSdkStyleSheet(root)];
     } else {
       // jsdom (unit tests) and older browsers have no constructable
       // stylesheets — fall back to a plain <style> tag portaled inside the
