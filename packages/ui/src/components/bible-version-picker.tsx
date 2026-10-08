@@ -26,6 +26,7 @@ import {
   isValidElement,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
   useCallback,
   useContext,
   useEffect,
@@ -49,6 +50,7 @@ import { ShadowIsolationBoundary } from '@/lib/shadow-isolation';
 
 export const RECENT_VERSIONS_KEY = 'youversion-platform:picker:recent-versions';
 const MAX_RECENT_VERSIONS = 3;
+const VersionSearchInputRefContext = createContext<RefObject<HTMLInputElement | null> | null>(null);
 
 type RecentVersion = Pick<
   BibleVersion,
@@ -689,6 +691,9 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
     onVersionPickerPress,
   } = useBibleVersionPickerContext();
   const wasOpenRef = useRef(open ?? false);
+  const inheritedVersionSearchInputRef = useContext(VersionSearchInputRefContext);
+  const localVersionSearchInputRef = useRef<HTMLInputElement>(null);
+  const versionSearchInputRef = inheritedVersionSearchInputRef ?? localVersionSearchInputRef;
 
   // Resolve publisher names once for the whole list, deduped by organization id,
   // instead of mounting a fetching hook per row (avoids N+1 requests).
@@ -754,29 +759,39 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
         }
         theme={background}
         side={side}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          if (isLanguagesOpen) return;
+          queueMicrotask(() => {
+            const input = versionSearchInputRef.current;
+            if (input?.isConnected && !input.closest('[inert]')) input.focus();
+          });
+        }}
       >
-        <div className="yv:relative yv:min-h-0 yv:overflow-hidden">
-          <div
-            inert={isLanguagesOpen ? true : undefined}
-            className={`yv:h-full yv:min-h-0 yv:overflow-hidden yv:transition-all yv:duration-300 yv:ease-out yv:motion-reduce:transition-none ${
-              isLanguagesOpen
-                ? 'yv:opacity-0 yv:pointer-events-none yv:blur-sm yv:scale-95'
-                : 'yv:opacity-100 yv:pointer-events-auto yv:blur-none yv:scale-100'
-            }`}
-          >
-            <Content onRequestClose={() => setIsPopoverOpen(false)} />
+        <VersionSearchInputRefContext.Provider value={versionSearchInputRef}>
+          <div className="yv:relative yv:min-h-0 yv:overflow-hidden">
+            <div
+              inert={isLanguagesOpen ? true : undefined}
+              className={`yv:h-full yv:min-h-0 yv:overflow-hidden yv:transition-all yv:duration-300 yv:ease-out yv:motion-reduce:transition-none ${
+                isLanguagesOpen
+                  ? 'yv:opacity-0 yv:pointer-events-none yv:blur-sm yv:scale-95'
+                  : 'yv:opacity-100 yv:pointer-events-auto yv:blur-none yv:scale-100'
+              }`}
+            >
+              <Content onRequestClose={() => setIsPopoverOpen(false)} />
+            </div>
+            <div
+              inert={isLanguagesOpen ? undefined : true}
+              className={`yv:h-full yv:min-h-0 yv:overflow-hidden yv:absolute yv:inset-0 yv:transition-all yv:duration-300 yv:ease-out yv:motion-reduce:transition-none ${
+                isLanguagesOpen
+                  ? 'yv:opacity-100 yv:pointer-events-auto yv:blur-none yv:scale-100'
+                  : 'yv:opacity-0 yv:pointer-events-none yv:blur-sm yv:scale-95'
+              }`}
+            >
+              <LanguagePanel onRequestClose={closeLanguagePanel} />
+            </div>
           </div>
-          <div
-            inert={isLanguagesOpen ? undefined : true}
-            className={`yv:h-full yv:min-h-0 yv:overflow-hidden yv:absolute yv:inset-0 yv:transition-all yv:duration-300 yv:ease-out yv:motion-reduce:transition-none ${
-              isLanguagesOpen
-                ? 'yv:opacity-100 yv:pointer-events-auto yv:blur-none yv:scale-100'
-                : 'yv:opacity-0 yv:pointer-events-none yv:blur-sm yv:scale-95'
-            }`}
-          >
-            <LanguagePanel onRequestClose={closeLanguagePanel} />
-          </div>
-        </div>
+        </VersionSearchInputRefContext.Provider>
       </PopoverContent>
     );
   }
@@ -886,6 +901,7 @@ function Content({ open, onRequestClose }: BibleVersionPickerContentProps = {}) 
         <div className="yv:grid yv:grid-cols-[1fr_auto] yv:gap-2">
           <InputGroup className="yv:bg-background yv:shadow-none yv:border-border">
             <InputGroupInput
+              ref={versionSearchInputRef}
               aria-label={t('versionSearchAriaLabel')}
               tabIndex={1}
               type="text"

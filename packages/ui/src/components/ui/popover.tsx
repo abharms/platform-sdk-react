@@ -79,6 +79,13 @@ function PopoverContent({
   const { t } = useTranslation(undefined, { i18n });
   const direction = useInterfaceDirection();
   const portal = React.useContext(PopoverPortalContext);
+  const generatedHeadingId = React.useId();
+  const hasExplicitLabel = Boolean(props['aria-label']?.trim());
+  const hasExplicitLabelledBy = Boolean(props['aria-labelledby']?.trim());
+  const headingId =
+    showHeader && heading != null && !hasExplicitLabel && !hasExplicitLabelledBy
+      ? generatedHeadingId
+      : undefined;
 
   if (portal.awaitingPortalTarget) return null;
 
@@ -92,6 +99,7 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         collisionPadding={16}
+        aria-labelledby={headingId}
         onKeyDown={(event) => {
           onKeyDown?.(event);
           if (
@@ -147,7 +155,9 @@ function PopoverContent({
             ])}
           >
             {headerLeading}
-            <h2 className="yv:font-bold yv:text-base">{heading}</h2>
+            <h2 id={headingId} className="yv:font-bold yv:text-base">
+              {heading}
+            </h2>
             {headerChild}
             <PopoverClose asChild>
               <Button

@@ -382,10 +382,6 @@ export const HostileCssConstrainedLayout: Story = {
   ),
   play: async ({ canvasElement }) => {
     const root = await waitForShadowRoot(canvasElement);
-    const body = root.querySelector<HTMLElement>(
-      '[data-yv-shadow-content-wrapper] > [data-yv-sdk]',
-    );
-    const consumerChild = root.querySelector<HTMLElement>('[data-testid="consumer-reader-child"]');
     const renderer = await waitFor(
       () => {
         const element = root.querySelector<HTMLElement>('[data-slot="yv-bible-renderer"]');
@@ -394,11 +390,20 @@ export const HostileCssConstrainedLayout: Story = {
       },
       { timeout: 10000 },
     );
-    const scroller = root.querySelector<HTMLElement>('main');
-    const toolbar = root.querySelector<HTMLElement>('section');
-    if (!body || !consumerChild || !scroller || !toolbar) {
-      throw new Error('reader layout evidence not rendered');
-    }
+    const { body, consumerChild, scroller, toolbar } = await waitFor(() => {
+      const body = root.querySelector<HTMLElement>(
+        '[data-yv-shadow-content-wrapper] > [data-yv-sdk]',
+      );
+      const consumerChild = root.querySelector<HTMLElement>(
+        '[data-testid="consumer-reader-child"]',
+      );
+      const scroller = root.querySelector<HTMLElement>('main');
+      const toolbar = root.querySelector<HTMLElement>('section');
+      if (!body || !consumerChild || !scroller || !toolbar) {
+        throw new Error('reader layout evidence not rendered');
+      }
+      return { body, consumerChild, scroller, toolbar };
+    });
 
     await expect(canvasElement.querySelector('[data-testid="consumer-reader-child"]')).toBeNull();
     await expect(body).toHaveAttribute('data-yv-theme', 'dark');

@@ -307,6 +307,12 @@ export const TopLayerEscapesClippingAndPreservesSemantics: Story = {
       'section',
       'picker header not rendered',
     );
+    const dialogHeading = header.querySelector<HTMLElement>('h2');
+    if (!dialogHeading) throw new Error('picker dialog heading not rendered');
+    const dialogLabelId = panel.getAttribute('aria-labelledby');
+    await expect(dialogLabelId).toBeTruthy();
+    await expect(root.getElementById(dialogLabelId!)).toBe(dialogHeading);
+    await expect(dialogHeading).toBeVisible();
     const versionHeading = await waitForElement<HTMLElement>(
       panel,
       '[data-testid="version-list"] h3',
@@ -366,9 +372,12 @@ export const StylingFocusDismissalAndRapidReopen: Story = {
       'outside control not rendered',
     );
     const { root, trigger, topLayer, panel } = await openPicker(canvasElement);
+    const versionSearchInput = Array.from(
+      panel.querySelectorAll<HTMLInputElement>('[data-slot="input-group-control"]'),
+    ).find((input) => !input.closest('[inert]'));
+    if (!versionSearchInput) throw new Error('visible version search input not rendered');
     await waitFor(async () => {
-      const focused = root.activeElement;
-      await expect(focused !== null && panel.contains(focused)).toBe(true);
+      await expect(root.activeElement).toBe(versionSearchInput);
     });
     const exitAnimationStyle = canvasElement.ownerDocument.createElement('style');
     exitAnimationStyle.textContent = `
@@ -460,13 +469,15 @@ export const ProviderDirectionRejectsHostVisualValues: Story = {
     const ownerWindow = ownerDocument.defaultView;
     if (!ownerWindow) throw new Error('story owner window not available');
 
-    const hostControl = canvasElement.querySelector<HTMLElement>(
+    const hostControl = await waitForElement<HTMLElement>(
+      canvasElement,
       '[data-testid="hostile-inheritance-control"]',
+      'hostile inheritance control not rendered',
     );
-    if (!hostControl) throw new Error('hostile inheritance control not rendered');
 
     const { root, trigger, panel } = await openPicker(canvasElement);
     await waitFor(async () => await expect(trigger).toHaveTextContent('NIV'));
+    await ownerDocument.fonts.ready;
     const wrapper = root.querySelector<HTMLElement>('[data-yv-shadow-content-wrapper]');
     const heading = panel.querySelector<HTMLElement>('h2');
     const inputGroup = panel.querySelector<HTMLElement>('[data-slot="input-group"]');
@@ -576,9 +587,16 @@ export const MultiplePickersCreateIndependentLazyContainers: Story = {
     </div>
   ),
   play: async ({ canvasElement }) => {
-    const first = canvasElement.querySelector<HTMLElement>('[data-testid="first-picker"]');
-    const second = canvasElement.querySelector<HTMLElement>('[data-testid="second-picker"]');
-    if (!first || !second) throw new Error('picker harness not rendered');
+    const first = await waitForElement<HTMLElement>(
+      canvasElement,
+      '[data-testid="first-picker"]',
+      'first picker harness not rendered',
+    );
+    const second = await waitForElement<HTMLElement>(
+      canvasElement,
+      '[data-testid="second-picker"]',
+      'second picker harness not rendered',
+    );
     const firstRoot = await waitForShadowRoot(first);
     const secondRoot = await waitForShadowRoot(second);
     await expect(firstRoot.querySelector('[data-yv-shadow-local-overlay]')).toBeNull();
@@ -614,10 +632,13 @@ export const MultiplePopoversShareOneIslandContainer: Story = {
   render: () => <TwoPickersInOneIsland />,
   play: async ({ canvasElement }) => {
     const root = await waitForShadowRoot(canvasElement);
-    const triggers = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-slot="popover-trigger"]'),
-    );
-    await expect(triggers).toHaveLength(2);
+    const triggers = await waitFor(async () => {
+      const elements = Array.from(
+        root.querySelectorAll<HTMLElement>('[data-slot="popover-trigger"]'),
+      );
+      await expect(elements).toHaveLength(2);
+      return elements;
+    });
     const [firstTrigger, secondTrigger] = triggers;
     if (!firstTrigger || !secondTrigger) throw new Error('picker triggers not rendered');
     await expect(root.querySelector('[data-yv-shadow-local-overlay]')).toBeNull();
