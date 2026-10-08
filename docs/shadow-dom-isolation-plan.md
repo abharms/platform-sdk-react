@@ -116,7 +116,7 @@ means a single shared session is not acceptable evidence.
 
 | Field | Release-candidate evidence |
 | --- | --- |
-| Commit SHA | `81d29f83de8ab19558bbdef159942850d437a951` |
+| Commit SHA | `ddccb9dfdcc0f93b109415b9e716577b8b2a8552` |
 | Date and operator | 2026-10-08; Codex on Austin Harms's local machine |
 | macOS version and build | macOS 26.6.2, build 25G83 |
 | Safari version and build | Safari 26.6.2; SafariDriver 21624.5.1.11.3 |
@@ -433,7 +433,7 @@ separately in YPE-5749.
 - The focused Shadow DOM browser suite runs in Chromium, Firefox, and Playwright
   WebKit. Playwright WebKit is not a substitute for testing actual Safari. The
   final release-candidate run completed 38/38 stories in isolated SafariDriver
-  sessions at commit `81d29f83de8ab19558bbdef159942850d437a951`. Repeat actual
+  sessions at commit `ddccb9dfdcc0f93b109415b9e716577b8b2a8552`. Repeat actual
   Safari after the rollout-policy trigger changes.
 - Browser DOM relationship reflection is not a substitute for VoiceOver, NVDA,
   or other real assistive-technology verification. The required manual evidence
