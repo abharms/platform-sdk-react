@@ -410,7 +410,9 @@ export const HostileCssConstrainedLayout: Story = {
     await expect(body).toHaveAttribute('dir', 'rtl');
     await expect(renderer).toHaveAttribute('dir', 'ltr');
     await expect(getComputedStyle(renderer).fontFamily).toContain('Inter');
-    await expect(getComputedStyle(renderer).fontSize).toBe('18px');
+    await waitFor(async () => {
+      await expect(getComputedStyle(renderer).fontSize).toBe('18px');
+    });
     await expect(getComputedStyle(scroller).overflowY).toBe('auto');
     await expect(getComputedStyle(consumerChild).color).not.toBe('rgb(255, 0, 0)');
     await expect(consumerChild.getBoundingClientRect().width).toBeLessThanOrEqual(390);

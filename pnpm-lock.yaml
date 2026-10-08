@@ -395,6 +395,9 @@ importers:
       vitest-browser-react:
         specifier: 2.0.2
         version: 2.0.2(@types/react-dom@19.1.2(@types/react@19.1.2))(@types/react@19.1.2)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)(vitest@4.0.4)
+      webdriverio:
+        specifier: 10.0.0
+        version: 10.0.0
 
   tools/tsconfig: {}
 

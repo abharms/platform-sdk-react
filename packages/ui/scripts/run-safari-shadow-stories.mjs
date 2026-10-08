@@ -45,6 +45,44 @@ function printCapturedOutput(result) {
   }
 }
 
+function readStoryEvidence(resultPath, story) {
+  try {
+    const report = JSON.parse(readFileSync(resultPath, 'utf8'));
+    const testResults = Array.isArray(report.testResults) ? report.testResults : [];
+    const assertions = testResults.flatMap((testResult) =>
+      Array.isArray(testResult.assertionResults) ? testResult.assertionResults : [],
+    );
+    const passedAssertions = assertions.filter(({ status }) => status === 'passed');
+    const failedAssertions = assertions.filter(({ status }) => status === 'failed');
+    const expectedFile = path.resolve(story.file);
+    const reportedFiles = testResults.map(({ name }) => path.resolve(name));
+    const failures = [];
+
+    if (report.numPassedTests !== 1 || passedAssertions.length !== 1) {
+      failures.push('expected exactly one passed assertion');
+    }
+    if (report.numFailedTests !== 0 || failedAssertions.length !== 0) {
+      failures.push('expected zero failed assertions');
+    }
+    if (passedAssertions[0]?.fullName !== story.name) {
+      failures.push(`passed assertion did not match ${JSON.stringify(story.name)}`);
+    }
+    if (testResults.length !== 1 || reportedFiles[0] !== expectedFile) {
+      failures.push(`result file did not match ${JSON.stringify(expectedFile)}`);
+    }
+
+    return {
+      valid: failures.length === 0,
+      failure: failures.length > 0 ? failures.join('; ') : undefined,
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      failure: `missing or malformed Vitest JSON: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
 const temporaryDirectory = mkdtempSync(path.join(tmpdir(), 'yv-safari-stories-'));
 const discoveryPath = path.join(temporaryDirectory, 'stories.json');
 let stories;
@@ -90,55 +128,66 @@ if (dryRun) {
 }
 
 const results = [];
-for (const [index, story] of stories.entries()) {
-  const relativeFile = path.relative(packageDirectory, story.file);
-  const startedAt = Date.now();
-  console.log(`\n[${index + 1}/${stories.length}] ${relativeFile} :: ${story.name}`);
+const resultsDirectory = mkdtempSync(path.join(tmpdir(), 'yv-safari-results-'));
+try {
+  for (const [index, story] of stories.entries()) {
+    const relativeFile = path.relative(packageDirectory, story.file);
+    const startedAt = Date.now();
+    console.log(`\n[${index + 1}/${stories.length}] ${relativeFile} :: ${story.name}`);
 
-  let attempts = 0;
-  let retryReason;
-  let result;
-  do {
-    attempts += 1;
-    result = runVitest(
-      [
-        'run',
-        '--project',
-        'storybook',
-        relativeFile,
-        '--testNamePattern',
-        `^${escapeRegularExpression(story.name)}$`,
-        '--reporter=verbose',
-        '--no-file-parallelism',
-      ],
-      { capture: true, timeout: storyTimeout },
-    );
-    printCapturedOutput(result);
+    let attempts = 0;
+    let retryReason;
+    let result;
+    let resultPath;
+    do {
+      attempts += 1;
+      resultPath = path.join(resultsDirectory, `${index + 1}-${attempts}.json`);
+      result = runVitest(
+        [
+          'run',
+          '--project',
+          'storybook',
+          relativeFile,
+          '--testNamePattern',
+          `^${escapeRegularExpression(story.name)}$`,
+          '--reporter=verbose',
+          '--reporter=json',
+          `--outputFile.json=${resultPath}`,
+          '--no-file-parallelism',
+        ],
+        { capture: true, timeout: storyTimeout },
+      );
+      printCapturedOutput(result);
 
-    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
-    const previousSafariSessionStillPaired =
-      output.includes(safariSessionCreationFailure) && output.includes(safariSessionUnavailable);
-    if (result.status === 0 || !previousSafariSessionStillPaired || attempts === 2) {
-      break;
-    }
+      const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+      const previousSafariSessionStillPaired =
+        output.includes(safariSessionCreationFailure) && output.includes(safariSessionUnavailable);
+      if (result.status === 0 || !previousSafariSessionStillPaired || attempts === 2) {
+        break;
+      }
 
-    retryReason = 'SafariDriver retained the previous WebDriver session';
-    console.warn(
-      `SafariDriver retained the previous session; retrying ${relativeFile} :: ${story.name} once.`,
-    );
-    await new Promise((resolve) => setTimeout(resolve, safariSessionRetryDelay));
-  } while (attempts < 2);
+      retryReason = 'SafariDriver retained the previous WebDriver session';
+      console.warn(
+        `SafariDriver retained the previous session; retrying ${relativeFile} :: ${story.name} once.`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, safariSessionRetryDelay));
+    } while (attempts < 2);
 
-  const timedOut = result.error?.code === 'ETIMEDOUT';
-  results.push({
-    file: relativeFile,
-    name: story.name,
-    status: timedOut ? 'timed-out' : result.status === 0 ? 'passed' : 'failed',
-    exitCode: result.status,
-    attempts,
-    retryReason,
-    durationSeconds: Math.round((Date.now() - startedAt) / 100) / 10,
-  });
+    const timedOut = result.error?.code === 'ETIMEDOUT';
+    const evidence = readStoryEvidence(resultPath, story);
+    results.push({
+      file: relativeFile,
+      name: story.name,
+      status: timedOut ? 'timed-out' : result.status === 0 && evidence.valid ? 'passed' : 'failed',
+      exitCode: result.status,
+      attempts,
+      retryReason,
+      evidenceFailure: evidence.failure,
+      durationSeconds: Math.round((Date.now() - startedAt) / 100) / 10,
+    });
+  }
+} finally {
+  rmSync(resultsDirectory, { recursive: true, force: true });
 }
 
 console.log('\nSafari focused-story summary:');

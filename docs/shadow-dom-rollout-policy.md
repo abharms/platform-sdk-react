@@ -5,11 +5,14 @@
 YPE-5356 defines the coordinated package-wide rollout for compatible public UI
 components. Every included implementation group is present on the coordinated
 release branch, but this document does not claim that the major release has
-shipped. Publishing remains gated by the YPE-5952 package, browser, actual-Safari,
-and assistive-technology validation below. The implemented boundary extends the
+shipped. Publishing remains gated by the YPE-5952 package, browser, and
+assistive-technology validation below. The final release-candidate actual-Safari
+run is complete at commit `81d29f83de8ab19558bbdef159942850d437a951`;
+human assistive-technology validation remains pending, and future trigger
+changes require another Safari run. The implemented boundary extends the
 architecture recorded in [ADR 0007](adr/0007-prototype-shadow-dom-style-isolation.md):
 `YouVersionAuthButton`, `BibleChapterPicker.Root`, `BibleVersionPicker.Root`,
-`ProfileAvatar`, `Separator`, `FootnoteContent`, and standalone
+`BibleReader.Root`, `ProfileAvatar`, `Separator`, `FootnoteContent`, and standalone
 `BibleThemeSettingsContent`, `BibleTextView`, `VerseOfTheDay`, and `BibleCard`
 create automatic shadow
 boundaries. Compound members and composed leaf components remain in their
@@ -109,7 +112,7 @@ supported component contract.
 | Opening a peer popover dismisses the current peer across component roots | Accepted | Keep the single-active-peer behavior. Supporting concurrent peer popovers would require a demonstrated product journey and separate design. |
 | Nested-dialog and rapid-reopen final focus restoration | Accepted | Preserve the behavior resolved by YPE-5889/PR 414 as regression coverage rather than duplicating the implementation in rollout tickets. |
 | Stylesheet construction or adoption can throw | Resolved by YPE-5947 | Construction, replacement, and adoption failures recover to the local `<style>` path without losing component rendering; later roots can still use the per-document constructable sheet. |
-| Playwright WebKit is not actual Safari | Follow-up | Repeat SafariDriver validation before the coordinated release candidate and after changes to the host, stylesheet installation, portal controller, or focus controller. |
+| Playwright WebKit is not actual Safari | Release-candidate run complete; future trigger | The isolated-session SafariDriver run completed 38/38 stories at commit `81d29f83de8ab19558bbdef159942850d437a951`. Repeat after changes to the host, stylesheet installation, portal controller, focus controller, or other significant platform seams. |
 | Release-candidate screen-reader evidence is pending | Release gate | Complete the bounded YPE-5952 Safari/VoiceOver and Chrome-or-Edge/NVDA smoke pass. Record exact versions and per-journey results; do not generalize beyond them. |
 
 ## Implementation plan
@@ -171,8 +174,10 @@ boundary.
 
 The dependency-ordered component groups, YPE-5994, and YPE-6040 are complete.
 YPE-5889 and YPE-5946 provide reusable focus-restoration and cross-browser
-evidence. YPE-5952 owns the remaining coordinated release-candidate validation,
-consumer documentation, and major-release gate.
+evidence. YPE-5952 owns the remaining human assistive-technology validation,
+consumer documentation, and major-release gate. Its final actual-Safari
+candidate run is complete at commit
+`81d29f83de8ab19558bbdef159942850d437a951`.
 
 ## Validation gates
 
@@ -180,9 +185,10 @@ consumer documentation, and major-release gate.
 
 - Existing unit, type, lint, build, export, and compiled-style checks pass.
 - The focused Shadow DOM suite passes Chromium, Firefox, and Playwright WebKit.
-- Actual Safari is repeated before the coordinated release candidate and after
-  changes to the host, stylesheet installation, portal controller, or focus
-  controller.
+- The final actual-Safari candidate run completed 38/38 isolated-session stories
+  at commit `81d29f83de8ab19558bbdef159942850d437a951`. Repeat after changes to the
+  host, stylesheet installation, portal controller, focus controller, or other
+  significant platform seams.
 - YPE-5437's Normal and Strict Mode mount/remove/remount fixture stays green and
   continues to reuse one stylesheet object per document.
 - The YPE-5400 custom-property guard stays exact; no wildcard ambient namespace

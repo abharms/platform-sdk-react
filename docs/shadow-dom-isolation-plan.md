@@ -71,7 +71,7 @@ the YPE-5952 section below.
 
 | Area | Evidence today | Status | Remaining work |
 | --- | --- | --- | --- |
-| Host CSS isolation | Hostile-CSS demos and focused browser coverage exercise element selectors, direction inheritance, vertical writing and typography resets, hostile custom properties, universal `!important` rules, host attacks, and generated pseudo-content. | Validated for the included groups in Chromium, Firefox, Playwright WebKit, and recorded local Safari runs | Repeat actual Safari against the final release candidate. |
+| Host CSS isolation | Hostile-CSS demos and focused browser coverage exercise element selectors, direction inheritance, vertical writing and typography resets, hostile custom properties, universal `!important` rules, host attacks, and generated pseudo-content. | Validated for the included groups in Chromium, Firefox, Playwright WebKit, and the recorded 38/38 final-candidate Safari run | Repeat actual Safari after the rollout-policy trigger changes. |
 | SSR and hydration | Focused React coverage verifies reuse of the exact empty server host, matching hydration without recoverable errors or duplicate content, and a null forwarded ref before the passive-effect mount. Group-specific sections below cover the included boundary. | Accepted for the coordinated client-only boundary | Preserve the empty-host, possible-pop-in, possible-layout-movement, and no-JavaScript limitations in consumer documentation. |
 | Component behavior | Group-specific unit and browser coverage below exercises public behavior, refs, events, composition, and Strict Mode lifecycle. | Validated for the included groups | Complete the final package/browser gates and manual release-candidate checks. |
 | Owner-document handling | Focused coverage mounts into a same-origin iframe and verifies document-compatible stylesheet construction. YPE-5947 also covers construction, replacement, and adoption failure recovery. | Validated in Chromium, Firefox, Playwright WebKit, and local Safari 26.6.2 | None. |
@@ -91,9 +91,10 @@ the YPE-5952 section below.
 ## YPE-5952 release-candidate validation
 
 This section is the durable record for the final coordinated-release checks. It
-does not convert automated DOM assertions into screen-reader evidence. All
-release-candidate Safari and assistive-technology results are **pending** until a
-human records the exact environment and per-journey result below.
+does not convert automated DOM assertions into screen-reader evidence. The final
+release-candidate Safari browser run is recorded below. All assistive-technology
+results remain **pending** until a human records the exact environment and
+per-journey result below.
 
 Use the existing production Storybook journeys; do not add duplicate stories
 only to execute this checklist:
@@ -115,13 +116,13 @@ means a single shared session is not acceptable evidence.
 
 | Field | Release-candidate evidence |
 | --- | --- |
-| Commit SHA | Pending |
-| Date and operator | Pending |
-| macOS version and build | Pending |
-| Safari version and build | Pending |
-| Storybook build command or artifact | Pending |
-| Focused story count and per-story results | Pending |
-| Failures, linked blockers, or reruns | Pending |
+| Commit SHA | `81d29f83de8ab19558bbdef159942850d437a951` |
+| Date and operator | 2026-10-08; Codex on Austin Harms's local machine |
+| macOS version and build | macOS 26.6.2, build 25G83 |
+| Safari version and build | Safari 26.6.2; SafariDriver 21624.5.1.11.3 |
+| Storybook build command or artifact | `pnpm --filter @youversion/platform-react-ui test:shadow-safari` |
+| Focused story count and per-story results | 38/38 passed. The recorded candidate run used one fresh process and SafariDriver session per story. A subsequent hardened-runner verification also passed 38/38: 37 stories passed on the first attempt, and one retried once in a new process after SafariDriver reported that the prior session was still paired. |
+| Failures, linked blockers, or reruns | The recorded candidate had 0 assertion failures and 0 timeouts. Exploratory Safari runs exposed and led to fixes for picker focus, readiness and font races, and popover accessible naming. The subsequent hardened-runner verification had 0 assertion failures and 0 timeouts, plus the one bounded SafariDriver session-creation retry described above. |
 
 ### Assistive-technology evidence
 
@@ -337,8 +338,8 @@ coordination for the coordinated rollout.
   layout, and no-JavaScript limitations are acceptable for that component.
 - Accept single-active-peer popover dismissal. Concurrent peer overlays require
   a demonstrated product journey and a separate design. The final actual-Safari
-  rerun and bounded assistive-technology smoke pass remain pending in the
-  YPE-5952 release-candidate section above.
+  candidate run is recorded above; the bounded assistive-technology smoke pass
+  remains pending, and future trigger changes require another Safari run.
 - Keep the YPE-5400 custom-property contract and compiled-stylesheet prevention
   guard green as component styles change. The audit below closes the known
   ambient dependency; `all: initial` still does not reset custom properties.
@@ -430,13 +431,10 @@ separately in YPE-5749.
 - Open shadow roots prevent CSS selector crossover; they do not prevent
   same-page JavaScript from inspecting or mutating the root.
 - The focused Shadow DOM browser suite runs in Chromium, Firefox, and Playwright
-  WebKit. Playwright WebKit is not a substitute for testing actual Safari. All
-  22-story pre-picker-rollout baseline returned explicit success events in
-  local Safari 26.6.2 when each story ran in a fresh SafariDriver session. A
-  single long-lived session returned success for 20/22 and left the sign-in and
-  verse-action play functions pending. The cause of that session-dependent
-  stall is unresolved; repeat actual-Safari validation in isolated sessions and
-  record it in the YPE-5952 release-candidate section.
+  WebKit. Playwright WebKit is not a substitute for testing actual Safari. The
+  final release-candidate run completed 38/38 stories in isolated SafariDriver
+  sessions at commit `81d29f83de8ab19558bbdef159942850d437a951`. Repeat actual
+  Safari after the rollout-policy trigger changes.
 - Browser DOM relationship reflection is not a substitute for VoiceOver, NVDA,
   or other real assistive-technology verification. The required manual evidence
   remains pending until the exact environments and journey results are recorded

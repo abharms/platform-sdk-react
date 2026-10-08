@@ -68,6 +68,8 @@ function PopoverContent({
   sideOffset = 4,
   theme = 'light',
   onKeyDown,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   showHeader?: boolean;
@@ -80,10 +82,10 @@ function PopoverContent({
   const direction = useInterfaceDirection();
   const portal = React.useContext(PopoverPortalContext);
   const generatedHeadingId = React.useId();
-  const hasExplicitLabel = Boolean(props['aria-label']?.trim());
-  const hasExplicitLabelledBy = Boolean(props['aria-labelledby']?.trim());
+  const normalizedAriaLabel = ariaLabel?.trim() || undefined;
+  const normalizedAriaLabelledBy = ariaLabelledBy?.trim() || undefined;
   const headingId =
-    showHeader && heading != null && !hasExplicitLabel && !hasExplicitLabelledBy
+    showHeader && heading != null && !normalizedAriaLabel && !normalizedAriaLabelledBy
       ? generatedHeadingId
       : undefined;
 
@@ -99,7 +101,6 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         collisionPadding={16}
-        aria-labelledby={headingId}
         onKeyDown={(event) => {
           onKeyDown?.(event);
           if (
@@ -144,6 +145,8 @@ function PopoverContent({
           className,
         )}
         {...props}
+        aria-label={normalizedAriaLabel}
+        aria-labelledby={normalizedAriaLabelledBy ?? headingId}
       >
         {showHeader ? (
           <section

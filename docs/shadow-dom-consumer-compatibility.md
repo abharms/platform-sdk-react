@@ -81,8 +81,11 @@ through SafariDriver when each ran in a fresh browser session. A single
 long-lived SafariDriver session stalled on the sign-in dialog and verse action
 popover stories after 20 successes, so isolated sessions are required for this
 smoke setup. Actual Safari is not part of continuous integration. The current
-YPE-5952 release-candidate Safari and assistive-technology evidence remains
-pending in the [validation plan](shadow-dom-isolation-plan.md#ype-5952-release-candidate-validation).
+YPE-5952 release-candidate run completed 38/38 focused stories in isolated local
+Safari sessions at commit `81d29f83de8ab19558bbdef159942850d437a951` and is
+recorded in the [validation plan](shadow-dom-isolation-plan.md#ype-5952-release-candidate-validation).
+Human assistive-technology evidence remains pending. Actual Safari must be
+repeated after the trigger changes defined by the rollout policy.
 Reflected ARIA element properties demonstrate DOM relationship resolution, not
 announcements or other assistive-technology behavior. Any eventual claim must
 name only the exact browser and assistive-technology combination validated.
@@ -91,7 +94,6 @@ name only the exact browser and assistive-technology combination validated.
 
 If a rollout component must participate in an outer native form or consume
 external labeling relationships, it needs an explicit public contract rather
-than cross-scope browser behavior. Release-candidate Safari and bounded
-assistive-technology validation, release documentation, and the coordinated
-stable release remain assigned by the
+than cross-scope browser behavior. Bounded assistive-technology validation,
+release documentation, and the coordinated stable release remain assigned by the
 [production rollout policy](shadow-dom-rollout-policy.md).
